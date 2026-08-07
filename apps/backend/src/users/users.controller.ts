@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import {
   IsEmail,
@@ -90,5 +99,11 @@ export class UsersController {
     @Body() dto: CreateBorrowerDto,
   ) {
     return this.users.createBorrower(user, dto);
+  }
+
+  @Delete('borrowers/:id')
+  @Roles('admin', 'loan_officer')
+  deleteBorrower(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.users.deleteBorrower(user, id);
   }
 }

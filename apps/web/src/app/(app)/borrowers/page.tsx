@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Plus, X } from 'lucide-react';
+import { Plus, Trash2, X } from 'lucide-react';
 import { creditScoreColor } from '@lms/utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -45,6 +45,8 @@ export default function BorrowersPage() {
   const [createdTempPassword, setCreatedTempPassword] = useState<string | null>(
     null,
   );
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<Borrower | null>(null);
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -134,6 +136,22 @@ export default function BorrowersPage() {
       setFormError(err instanceof Error ? err.message : 'Create failed');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function onDeleteConfirm() {
+    if (!confirmDelete) return;
+    setDeletingId(confirmDelete.id);
+    setError('');
+    try {
+      await api(`/borrowers/${confirmDelete.id}`, { method: 'DELETE' });
+      setConfirmDelete(null);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Delete failed');
+      setConfirmDelete(null);
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -243,10 +261,54 @@ export default function BorrowersPage() {
                       </div>
                     </div>
                   </div>
+                  <div className="mt-4 flex justify-end border-t border-border pt-3">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={deletingId === b.id}
+                      onClick={() => setConfirmDelete(b)}
+                      className="text-chart-red hover:bg-chart-red/10"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             );
           })}
+        </div>
+      )}
+
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="card-surface w-full max-w-md space-y-4 p-5 shadow-2xl">
+            <h2 className="font-display text-xl font-semibold">
+              Delete borrower?
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Remove <span className="text-foreground">{confirmDelete.full_name}</span>{' '}
+              ({confirmDelete.email}). This also deletes their applications,
+              documents, and closed loan history. Borrowers with active or
+              approved loans cannot be deleted.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => setConfirmDelete(null)}
+                disabled={deletingId === confirmDelete.id}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => void onDeleteConfirm()}
+                disabled={deletingId === confirmDelete.id}
+                className="bg-[#F87171] text-black hover:bg-[#F87171]/90"
+              >
+                {deletingId === confirmDelete.id ? 'Deleting…' : 'Delete'}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 

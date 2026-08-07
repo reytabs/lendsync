@@ -157,4 +157,93 @@ export class UsersService {
       on_time_rate: 100,
     };
   }
+
+  async deleteBorrower(actor: AuthUser, id: string) {
+    const profile = await this.db.one<{
+      id: string;
+      email: string;
+      full_name: string;
+      role: string;
+    }>('select id, email, full_name, role from profiles where id = $1', [id]);
+    if (!profile || profile.role !== 'borrower') {
+      throw new NotFoundException('Borrower not found');
+    }
+
+    const active = await this.db.one<{ count: string }>(
+      `select count(*)::text as count from loans
+       where borrower_id = $1
+         and status = any(array['approved','disbursed','active']::public.loan_status[])`,
+      [id],
+    );
+    if (Number(active?.count ?? 0) > 0) {
+      throw new BadRequestException(
+        'Cannot delete borrower with approved or active loans. Close or complete them first.',
+      );
+    }
+
+    const loanIds = await this.db.many<{ id: string }>(
+      'select id from loans where borrower_id = $1',
+      [id],
+    );
+    const ids = loanIds.map((l) => l.id);
+
+    if (ids.length) {
+      await this.db.query(
+        `delete from repayments where loan_id = any($1::uuid[])`,
+        [ids],
+      );
+      await this.db.query(
+        `delete from repayment_schedules where loan_id = any($1::uuid[])`,
+        [ids],
+      );
+      await this.db.query(
+        `delete from disbursements where loan_id = any($1::uuid[])`,
+        [ids],
+      );
+      await this.db.query(`delete from loans where borrower_id = $1`, [id]);
+    }
+
+    await this.db.query(
+      `delete from borrower_documents where borrower_id = $1`,
+      [id],
+    );
+    await this.db.query(
+      `delete from loan_applications where borrower_id = $1`,
+      [id],
+    );
+    // notifications cascade via FK; clear officer refs that might block delete
+    await this.db.query(
+      `update loan_applications set officer_id = null where officer_id = $1`,
+      [id],
+    );
+    await this.db.query(
+      `update loans set officer_id = null where officer_id = $1`,
+      [id],
+    );
+
+    const deleted = await this.db.one(
+      `delete from profiles where id = $1 and role = 'borrower' returning id`,
+      [id],
+    );
+    if (!deleted) {
+      throw new BadRequestException(
+        'Unable to delete borrower — related records may still reference this profile',
+      );
+    }
+
+    await this.db.query(
+      `insert into audit_logs (actor_id, action, entity_type, entity_id, meta)
+       values ($1, 'borrower_delete', 'profile', $2, $3::jsonb)`,
+      [
+        actor.id,
+        id,
+        JSON.stringify({
+          email: profile.email,
+          fullName: profile.full_name,
+        }),
+      ],
+    );
+
+    return { ok: true, id };
+  }
 }
