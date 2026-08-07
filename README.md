@@ -51,8 +51,10 @@ pnpm --filter @lms/web dev       # :3000
 
 Open [http://localhost:3000/login](http://localhost:3000/login)
 
-- Demo: any email + demo button uses `dev-admin-token` when `ALLOW_DEV_AUTH=true`
-- Real login: `admin@lendsync.local` / `admin123`
+- **Staff console:** `admin@lendsync.local` / `admin123` → `/dashboard`
+- **Borrower portal:** `maria@example.com` / `borrower123` → `/portal`
+
+Borrowers are staff-created only (Borrowers → New borrower). Portal features: apply, track loans, view EMI schedule (read-only), documents, profile.
 
 ## Design
 
@@ -72,9 +74,20 @@ psql "$DATABASE_URL" -f db/seed.sql
 ## Docker (API)
 
 ```bash
-cd apps/backend
-docker compose up --build
+# From monorepo root (build context must include packages/)
+docker build -f apps/backend/Dockerfile -t lendsync-api .
+docker run --rm -p 4000:4000 --env-file apps/backend/.env lendsync-api
 ```
+
+## Deploy (Railway API)
+
+1. Create a Railway service from this GitHub repo.
+2. **Root Directory:** leave empty (monorepo root). Do **not** use `apps/backend`.
+3. Use the included [`railway.toml`](railway.toml) — build runs `pnpm run build:backend` (builds `@lms/types` + `@lms/utils` then Nest).
+4. Variables: `DATABASE_URL`, `JWT_SECRET`, `CORS_ORIGIN` (your Vercel URL), `PORT` (Railway sets this; Nest should read `process.env.PORT`).
+5. Redeploy after pushing `railway.toml`.
+
+If you previously set Custom Build Command to only `pnpm --filter @lms/backend build`, remove it — that skips workspace packages and fails with `Cannot find module '@lms/utils'`.
 
 ## API docs
 

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { homeForRole, setStoredAuth } from '@/lib/auth';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
@@ -24,18 +25,15 @@ export default function LoginPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        localStorage.setItem('lms_token', data.access_token);
-        localStorage.setItem('lms_email', data.user?.email ?? email);
-        router.push('/dashboard');
-        return;
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          (data as { message?: string }).message || 'Invalid credentials',
+        );
       }
 
-      // Fallback for local demo when ALLOW_DEV_AUTH is enabled
-      localStorage.setItem('lms_token', 'dev-admin-token');
-      localStorage.setItem('lms_email', email);
-      router.push('/dashboard');
+      setStoredAuth(data);
+      router.push(homeForRole(data.user?.role ?? 'borrower'));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
@@ -47,7 +45,11 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
-          <div className="mx-auto mb-4 h-10 w-10 rounded-[6px] bg-primary shadow-[0_0_24px_rgba(212,165,60,0.4)]" />
+          <img
+            src="/logo.png"
+            alt="LendSync"
+            className="mx-auto mb-4 h-12 w-12 rounded-[8px] object-cover shadow-[0_0_24px_rgba(212,165,60,0.4)]"
+          />
           <h1 className="font-display text-3xl font-semibold tracking-tight">
             LendSync
           </h1>
@@ -79,7 +81,9 @@ export default function LoginPage() {
             {loading ? 'Signing in…' : 'Sign in'}
           </Button>
           <p className="text-center text-xs text-muted-foreground">
-            Default admin: admin@lendsync.local / admin123 (Postgres)
+            Staff: admin@lendsync.local / admin123
+            <br />
+            Borrower: maria@example.com / borrower123
           </p>
         </form>
       </div>

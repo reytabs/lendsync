@@ -7,10 +7,22 @@ import { calculateEmi } from '@lms/utils';
 import { DatabaseService } from '../database/database.service';
 import type { AuthUser } from '../auth/auth.guards';
 import { CreateLoanDto, LoanDecisionDto } from './loans.dto';
+import { NotificationsService } from '../notifications/notifications.service';
+
+function moneyLabel(cents: number) {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(cents / 100);
+}
 
 @Injectable()
 export class LoansService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(
+    private readonly db: DatabaseService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   async list(user: AuthUser, status?: string) {
     const params: unknown[] = [];
@@ -67,8 +79,23 @@ export class LoansService {
     let schedule: unknown[] = [];
     if (loan?.id) {
       schedule = await this.db.many(
-        `select * from repayment_schedules
-         where loan_id = $1 order by installment_no`,
+        `select s.*,
+                coalesce((
+                  select sum(r.amount_cents)::bigint
+                  from repayments r
+                  where r.schedule_id = s.id
+                ), 0) as paid_cents,
+                greatest(
+                  s.total_cents - coalesce((
+                    select sum(r.amount_cents)::bigint
+                    from repayments r
+                    where r.schedule_id = s.id
+                  ), 0),
+                  0
+                ) as remaining_cents
+         from repayment_schedules s
+         where s.loan_id = $1
+         order by s.installment_no`,
         [loan.id],
       );
     }
@@ -135,10 +162,51 @@ export class LoansService {
       params,
     );
     if (!data) throw new BadRequestException('Unable to submit application');
+
+    const borrower = await this.db.one<{ full_name: string }>(
+      'select full_name from profiles where id = $1',
+      [data.borrower_id],
+    );
+    const amount = moneyLabel(Number(data.principal_cents));
+    await this.notifications.notifyStaff({
+      kind: 'loan_submitted',
+      title: 'New loan application',
+      body: `${borrower?.full_name ?? 'Borrower'} submitted ${amount}.`,
+      href: '/applications',
+      entityType: 'loan_application',
+      entityId: data.id,
+    });
+    await this.notifications.notifyUser(data.borrower_id, {
+      kind: 'loan_submitted',
+      title: 'Application submitted',
+      body: `Your ${amount} application is under review.`,
+      href: `/portal/loans/${data.id}`,
+      entityType: 'loan_application',
+      entityId: data.id,
+    });
+
     return data;
   }
 
   async decide(id: string, user: AuthUser, dto: LoanDecisionDto) {
+    if (dto.decision === 'rejected' && !dto.notes?.trim()) {
+      throw new BadRequestException('Rejection reason is required');
+    }
+
+    const existing = await this.db.one(
+      'select * from loan_applications where id = $1',
+      [id],
+    );
+    if (!existing) throw new NotFoundException('Application not found');
+
+    // Must match public.loan_status — "pending" is a UI filter alias only
+    const decidable = ['submitted', 'under_review', 'draft'];
+    if (!decidable.includes(existing.status)) {
+      throw new BadRequestException(
+        `Cannot decide on application with status "${existing.status}"`,
+      );
+    }
+
     const status = dto.decision === 'approved' ? 'approved' : 'rejected';
     const app = await this.db.one(
       `update loan_applications
@@ -148,11 +216,15 @@ export class LoansService {
            decided_at = now(),
            updated_at = now()
        where id = $1
+         and status = any($5::text[]::public.loan_status[])
        returning *`,
-      [id, status, user.id, dto.notes ?? null],
+      [id, status, user.id, dto.notes?.trim() ?? null, decidable],
     );
-    if (!app) throw new BadRequestException('Application not found');
-
+    if (!app) {
+      throw new BadRequestException(
+        'Application was updated by someone else — refresh and try again',
+      );
+    }
     await this.db.query(
       `insert into audit_logs (actor_id, action, entity_type, entity_id, meta)
        values ($1, $2, 'loan_application', $3, $4::jsonb)`,
@@ -164,7 +236,29 @@ export class LoansService {
       ],
     );
 
-    if (dto.decision === 'rejected') return { application: app };
+    const amount = moneyLabel(Number(app.principal_cents));
+    if (dto.decision === 'rejected') {
+      await this.notifications.notifyUser(app.borrower_id, {
+        kind: 'loan_rejected',
+        title: 'Application rejected',
+        body: dto.notes?.trim()
+          ? `Your ${amount} application was rejected: ${dto.notes.trim()}`
+          : `Your ${amount} application was rejected.`,
+        href: `/portal/loans/${app.id}`,
+        entityType: 'loan_application',
+        entityId: app.id,
+      });
+      return { application: app };
+    }
+
+    await this.notifications.notifyUser(app.borrower_id, {
+      kind: 'loan_approved',
+      title: 'Application approved',
+      body: `Your ${amount} application was approved. EMI schedule is ready.`,
+      href: `/portal/loans/${app.id}`,
+      entityType: 'loan_application',
+      entityId: app.id,
+    });
 
     const product = await this.db.one(
       'select * from loan_products where id = $1',

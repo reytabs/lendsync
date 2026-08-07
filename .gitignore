@@ -10,3 +10,5 @@ dist
 coverage
 apps/backend/dist
 apps/web/.next
+.vercel
+.env*

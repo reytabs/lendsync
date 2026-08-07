@@ -110,6 +110,13 @@ export default function ApplicationsPage() {
   const [purpose, setPurpose] = useState('');
   const [submitAfterCreate, setSubmitAfterCreate] = useState(true);
 
+  const [decisionRow, setDecisionRow] = useState<ApplicationRow | null>(null);
+  const [decision, setDecision] = useState<'approved' | 'rejected' | null>(null);
+  const [decisionNotes, setDecisionNotes] = useState('');
+  const [deciding, setDeciding] = useState(false);
+  const [decisionError, setDecisionError] = useState('');
+  const [busyId, setBusyId] = useState<string | null>(null);
+
   const pageSize = 8;
   const selectedProduct = products.find((p) => p.id === productId);
 
@@ -163,6 +170,54 @@ export default function ApplicationsPage() {
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const rows = filtered.slice((page - 1) * pageSize, page * pageSize);
+
+  function openDecision(row: ApplicationRow, next: 'approved' | 'rejected') {
+    setDecisionRow(row);
+    setDecision(next);
+    setDecisionNotes('');
+    setDecisionError('');
+  }
+
+  function closeDecision() {
+    setDecisionRow(null);
+    setDecision(null);
+    setDecisionNotes('');
+    setDecisionError('');
+  }
+
+  function canDecide(status: string) {
+    return ['submitted', 'under_review', 'draft'].includes(status);
+  }
+
+  async function onDecide(e: React.FormEvent) {
+    e.preventDefault();
+    if (!decisionRow || !decision) return;
+    if (decision === 'rejected' && !decisionNotes.trim()) {
+      setDecisionError('Please add a rejection reason');
+      return;
+    }
+    setDeciding(true);
+    setDecisionError('');
+    setBusyId(decisionRow.id);
+    try {
+      await api(`/loans/${decisionRow.id}/decision`, {
+        method: 'POST',
+        body: JSON.stringify({
+          decision,
+          notes: decisionNotes.trim() || undefined,
+        }),
+      });
+      closeDecision();
+      if (decision === 'approved') setFilter('approved');
+      if (decision === 'rejected') setFilter('rejected');
+      await load();
+    } catch (err) {
+      setDecisionError(err instanceof Error ? err.message : 'Decision failed');
+    } finally {
+      setDeciding(false);
+      setBusyId(null);
+    }
+  }
 
   function openForm() {
     setFormError('');
@@ -298,6 +353,7 @@ export default function ApplicationsPage() {
                     <th className="pb-3">Status</th>
                     <th className="pb-3">Officer</th>
                     <th className="pb-3">Applied</th>
+                    <th className="pb-3 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -321,6 +377,31 @@ export default function ApplicationsPage() {
                       </td>
                       <td className="py-3 text-muted-foreground">
                         {formatDate(row.created_at)}
+                      </td>
+                      <td className="py-3">
+                        {canDecide(row.status) ? (
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              disabled={busyId === row.id}
+                              onClick={() => openDecision(row, 'rejected')}
+                            >
+                              Reject
+                            </Button>
+                            <Button
+                              size="sm"
+                              disabled={busyId === row.id}
+                              onClick={() => openDecision(row, 'approved')}
+                            >
+                              Approve
+                            </Button>
+                          </div>
+                        ) : (
+                          <span className="block text-right text-xs text-muted-foreground">
+                            —
+                          </span>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -490,6 +571,93 @@ export default function ApplicationsPage() {
                     : submitAfterCreate
                       ? 'Create & submit'
                       : 'Save draft'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {decisionRow && decision && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="card-surface w-full max-w-md space-y-4 p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="font-display text-xl font-semibold">
+                  {decision === 'approved' ? 'Approve application' : 'Reject application'}
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {borrowerName(decisionRow)} ·{' '}
+                  {money(Number(decisionRow.principal_cents))} ·{' '}
+                  {typeLabel[decisionRow.loan_type] ?? decisionRow.loan_type}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeDecision}
+                className="rounded-md p-1 text-muted-foreground hover:bg-white/5 hover:text-foreground"
+                aria-label="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={onDecide} className="space-y-3">
+              {decision === 'approved' ? (
+                <p className="text-sm text-muted-foreground">
+                  Approving creates the loan record and generates the EMI
+                  schedule for this borrower.
+                </p>
+              ) : (
+                <label className="block space-y-1.5 text-sm">
+                  <span className="text-muted-foreground">Rejection reason</span>
+                  <Input
+                    value={decisionNotes}
+                    onChange={(e) => setDecisionNotes(e.target.value)}
+                    placeholder="Required — shown to the borrower"
+                    required
+                  />
+                </label>
+              )}
+
+              {decision === 'approved' && (
+                <label className="block space-y-1.5 text-sm">
+                  <span className="text-muted-foreground">Notes (optional)</span>
+                  <Input
+                    value={decisionNotes}
+                    onChange={(e) => setDecisionNotes(e.target.value)}
+                    placeholder="Internal note"
+                  />
+                </label>
+              )}
+
+              {decisionError && (
+                <p className="text-sm text-chart-red">{decisionError}</p>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={closeDecision}
+                  disabled={deciding}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={deciding}
+                  className={
+                    decision === 'rejected'
+                      ? 'bg-[#F87171] text-black hover:bg-[#F87171]/90'
+                      : undefined
+                  }
+                >
+                  {deciding
+                    ? 'Saving…'
+                    : decision === 'approved'
+                      ? 'Confirm approve'
+                      : 'Confirm reject'}
                 </Button>
               </div>
             </form>

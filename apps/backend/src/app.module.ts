@@ -11,6 +11,7 @@ import { ReportsModule } from './reports/reports.module';
 import { AdminModule } from './admin/admin.module';
 import { StripeModule } from './stripe/stripe.module';
 import { DatabaseModule } from './database/database.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { DatabaseModule } from './database/database.module';
     ReportsModule,
     AdminModule,
     StripeModule,
+    NotificationsModule,
   ],
 })
 export class AppModule {}

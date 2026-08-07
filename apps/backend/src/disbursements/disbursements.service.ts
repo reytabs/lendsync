@@ -3,6 +3,15 @@ import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 import { DatabaseService } from '../database/database.service';
 import type { AuthUser } from '../auth/auth.guards';
+import { NotificationsService } from '../notifications/notifications.service';
+
+function moneyLabel(cents: number) {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(cents / 100);
+}
 
 @Injectable()
 export class DisbursementsService {
@@ -11,6 +20,7 @@ export class DisbursementsService {
   constructor(
     private readonly db: DatabaseService,
     private readonly config: ConfigService,
+    private readonly notifications: NotificationsService,
   ) {
     const key = this.config.get<string>('STRIPE_SECRET_KEY');
     if (key && !key.includes('xxx')) {
@@ -90,11 +100,15 @@ export class DisbursementsService {
        where id = $1`,
       [disbursementId],
     );
-    const loan = await this.db.one(
+    const loan = await this.db.one<{
+      application_id: string;
+      borrower_id: string;
+      principal_cents: string | number;
+    }>(
       `update loans
        set status = 'active', disbursed_at = now(), updated_at = now()
        where id = $1
-       returning application_id`,
+       returning application_id, borrower_id, principal_cents`,
       [loanId],
     );
     if (loan?.application_id) {
@@ -104,6 +118,30 @@ export class DisbursementsService {
          where id = $1`,
         [loan.application_id],
       );
+    }
+
+    if (loan) {
+      const amount = moneyLabel(Number(loan.principal_cents));
+      const borrower = await this.db.one<{ full_name: string }>(
+        'select full_name from profiles where id = $1',
+        [loan.borrower_id],
+      );
+      await this.notifications.notifyUser(loan.borrower_id, {
+        kind: 'loan_disbursed',
+        title: 'Loan disbursed',
+        body: `${amount} has been disbursed to your account.`,
+        href: `/portal/loans/${loan.application_id}`,
+        entityType: 'loan',
+        entityId: loanId,
+      });
+      await this.notifications.notifyStaff({
+        kind: 'loan_disbursed',
+        title: 'Disbursement completed',
+        body: `${amount} disbursed to ${borrower?.full_name ?? 'borrower'}.`,
+        href: '/repayments',
+        entityType: 'loan',
+        entityId: loanId,
+      });
     }
   }
 }

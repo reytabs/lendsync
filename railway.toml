@@ -1,0 +1,11 @@
+# Railway: set Root Directory to monorepo root (empty / ".")
+# Do NOT set root to apps/backend — workspace packages must be visible.
+
+[build]
+builder = "NIXPACKS"
+buildCommand = "pnpm install && pnpm run build:backend"
+
+[deploy]
+startCommand = "pnpm run start:backend"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5

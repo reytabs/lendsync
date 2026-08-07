@@ -1,4 +1,4 @@
-import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { IsInt, IsOptional, IsString, IsUUID, Min } from 'class-validator';
 import {
@@ -34,8 +34,14 @@ class CreateRepaymentDto {
 export class RepaymentsController {
   constructor(private readonly repayments: RepaymentsService) {}
 
+  @Get('due')
+  @Roles('loan_officer', 'admin', 'borrower')
+  listDue(@CurrentUser() user: AuthUser) {
+    return this.repayments.listDue(user);
+  }
+
   @Post()
-  @Roles('borrower', 'loan_officer', 'admin')
+  @Roles('loan_officer', 'admin')
   create(@CurrentUser() user: AuthUser, @Body() dto: CreateRepaymentDto) {
     return this.repayments.create(user, dto);
   }

@@ -24,6 +24,10 @@ export const metadata: Metadata = {
   title: 'LendSync — Lending Management System',
   description:
     'Manage loan applications, approvals, disbursements, and repayments.',
+  icons: {
+    icon: [{ url: '/logo.png', type: 'image/png' }],
+    apple: [{ url: '/apple-icon.png', type: 'image/png' }],
+  },
 };
 
 export default function RootLayout({

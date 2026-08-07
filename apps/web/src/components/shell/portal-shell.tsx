@@ -3,75 +3,74 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  LayoutDashboard,
-  FileText,
-  Users,
-  Calculator,
-  BarChart3,
-  Settings,
-  Search,
+  Home,
+  FilePlus2,
+  Wallet,
+  FolderOpen,
+  UserRound,
   PanelLeftClose,
   PanelLeft,
-  Banknote,
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { clearStoredAuth, type AuthSession } from '@/lib/auth';
 import { NotificationsBell } from '@/components/notifications/notifications-bell';
 
-const mainNav = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/applications', label: 'Loan Applications', icon: FileText },
-  { href: '/borrowers', label: 'Borrowers', icon: Users },
-  { href: '/repayments', label: 'Repayments', icon: Banknote },
-  { href: '/emi-calculator', label: 'EMI Calculator', icon: Calculator },
-];
-
-const analyticsNav = [
-  { href: '/reports', label: 'Reports & Analytics', icon: BarChart3 },
-  { href: '/admin', label: 'Admin Panel', icon: Settings },
+const nav = [
+  { href: '/portal', label: 'Home', icon: Home },
+  { href: '/portal/apply', label: 'Apply', icon: FilePlus2 },
+  { href: '/portal/loans', label: 'My loans', icon: Wallet },
+  { href: '/portal/documents', label: 'Documents', icon: FolderOpen },
+  { href: '/portal/profile', label: 'Profile', icon: UserRound },
 ];
 
 const titles: Record<string, { title: string; subtitle: string }> = {
-  '/dashboard': {
-    title: 'Financial Overview',
-    subtitle: 'Portfolio performance and key metrics',
+  '/portal': {
+    title: 'Welcome',
+    subtitle: 'Your loans and next steps',
   },
-  '/applications': {
-    title: 'Loan Applications',
-    subtitle: 'Review and manage loan requests',
+  '/portal/apply': {
+    title: 'Apply for a loan',
+    subtitle: 'Choose a product and submit your application',
   },
-  '/borrowers': {
-    title: 'Borrower Profiles',
-    subtitle: 'Customer accounts and credit history',
+  '/portal/loans': {
+    title: 'My loans',
+    subtitle: 'Applications and active balances',
   },
-  '/repayments': {
-    title: 'Repayments',
-    subtitle: 'Disburse loans and record borrower payments',
+  '/portal/documents': {
+    title: 'Documents',
+    subtitle: 'Upload and track KYC documents',
   },
-  '/emi-calculator': {
-    title: 'EMI Calculator',
-    subtitle: 'Compute repayment schedules and amortization',
-  },
-  '/reports': {
-    title: 'Reports & Analytics',
-    subtitle: 'Data insights and performance trends',
-  },
-  '/admin': {
-    title: 'Admin Panel',
-    subtitle: 'System configuration and access control',
+  '/portal/profile': {
+    title: 'Profile',
+    subtitle: 'Your contact details',
   },
 };
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function PortalShell({
+  children,
+  session,
+}: {
+  children: React.ReactNode;
+  session: AuthSession;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
-  const meta = titles[pathname] ?? {
-    title: 'LendSync',
-    subtitle: 'Lending Management System',
-  };
+
+  const meta =
+    titles[pathname] ??
+    (pathname.startsWith('/portal/loans/')
+      ? { title: 'Loan detail', subtitle: 'Status and repayment schedule' }
+      : { title: 'Borrower portal', subtitle: 'LendSync' });
+
+  const initials = (session.fullName || session.email || 'B')
+    .split(/\s+/)
+    .map((p) => p[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
 
   function NavItem({
     href,
@@ -82,7 +81,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     label: string;
     icon: React.ComponentType<{ className?: string }>;
   }) {
-    const active = pathname === href;
+    const active =
+      href === '/portal' ? pathname === href : pathname.startsWith(href);
     return (
       <Link
         href={href}
@@ -123,7 +123,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 LendSync
               </div>
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                Management System
+                Borrower Portal
               </div>
             </div>
           )}
@@ -137,19 +137,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </div>
             )}
             <div className="space-y-1">
-              {mainNav.map((item) => (
-                <NavItem key={item.href} {...item} />
-              ))}
-            </div>
-          </div>
-          <div>
-            {!collapsed && (
-              <div className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Analytics
-              </div>
-            )}
-            <div className="space-y-1">
-              {analyticsNav.map((item) => (
+              {nav.map((item) => (
                 <NavItem key={item.href} {...item} />
               ))}
             </div>
@@ -164,13 +152,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             )}
           >
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-xs font-semibold text-primary">
-              AU
+              {initials}
             </div>
             {!collapsed && (
               <div className="min-w-0">
-                <div className="truncate text-xs font-semibold">Admin User</div>
+                <div className="truncate text-xs font-semibold">
+                  {session.fullName || 'Borrower'}
+                </div>
                 <div className="truncate text-[10px] text-muted-foreground">
-                  Super Admin
+                  {session.email}
                 </div>
               </div>
             )}
@@ -202,22 +192,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <p className="text-xs text-muted-foreground">{meta.subtitle}</p>
           </div>
           <div className="flex items-center gap-3">
-            <div className="relative hidden md:block">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                className="w-56 pl-9"
-                placeholder="Quick search…"
-              />
-            </div>
             <NotificationsBell />
             <Button
               variant="secondary"
               size="sm"
               onClick={() => {
-                localStorage.removeItem('lms_token');
-                localStorage.removeItem('lms_role');
-                localStorage.removeItem('lms_email');
-                localStorage.removeItem('lms_full_name');
+                clearStoredAuth();
                 router.push('/login');
               }}
             >

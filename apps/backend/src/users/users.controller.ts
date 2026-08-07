@@ -1,6 +1,14 @@
-import { Controller, Get, Patch, Body, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { IsOptional, IsString } from 'class-validator';
+import {
+  IsEmail,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+  MinLength,
+} from 'class-validator';
 import {
   AuthGuard,
   CurrentUser,
@@ -24,6 +32,34 @@ class UpdateProfileDto {
   occupation?: string;
 }
 
+class CreateBorrowerDto {
+  @IsEmail()
+  email!: string;
+
+  @IsString()
+  @MinLength(2)
+  fullName!: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @IsOptional()
+  @IsString()
+  occupation?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(300)
+  @Max(850)
+  creditScore?: number;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(8)
+  password?: string;
+}
+
 @ApiTags('users')
 @ApiBearerAuth()
 @UseGuards(AuthGuard, RolesGuard)
@@ -45,5 +81,14 @@ export class UsersController {
   @Roles('admin', 'loan_officer')
   borrowers() {
     return this.users.listBorrowers();
+  }
+
+  @Post('borrowers')
+  @Roles('admin', 'loan_officer')
+  createBorrower(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: CreateBorrowerDto,
+  ) {
+    return this.users.createBorrower(user, dto);
   }
 }

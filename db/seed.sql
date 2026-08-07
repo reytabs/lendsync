@@ -1,5 +1,6 @@
 -- Seed admin + products + settings for local Postgres (lending)
 -- Admin login: admin@lendsync.local / admin123
+-- Borrower portal: maria@example.com / borrower123
 insert into public.profiles (id, email, full_name, role, password_hash, occupation, credit_score, kyc_status)
 values (
   '00000000-0000-4000-8000-000000000001',
@@ -17,13 +18,18 @@ on conflict (id) do update set
   role = excluded.role,
   password_hash = excluded.password_hash;
 
-insert into public.profiles (id, email, full_name, role, occupation, credit_score, kyc_status)
+insert into public.profiles (id, email, full_name, role, occupation, credit_score, kyc_status, password_hash)
 values
-  ('00000000-0000-4000-8000-000000000101', 'maria@example.com', 'Maria Santos', 'borrower', 'Business Owner', 720, 'verified'),
-  ('00000000-0000-4000-8000-000000000102', 'david@example.com', 'David Torres', 'borrower', 'Real Estate Investor', 680, 'verified'),
-  ('00000000-0000-4000-8000-000000000103', 'sofia@example.com', 'Sofia Mendez', 'borrower', 'Software Engineer', 745, 'pending'),
-  ('00000000-0000-4000-8000-000000000201', 'james@lendsync.local', 'James Reyes', 'loan_officer', 'Loan Officer', null, 'verified')
-on conflict (id) do nothing;
+  ('00000000-0000-4000-8000-000000000101', 'maria@example.com', 'Maria Santos', 'borrower', 'Business Owner', 720, 'verified', '$2b$10$mgeg.hgwrlmSoB.mied65eZiwLkzi9Nq3v/vvrZkeE5KC3c9Vnwyu'),
+  ('00000000-0000-4000-8000-000000000102', 'david@example.com', 'David Torres', 'borrower', 'Real Estate Investor', 680, 'verified', null),
+  ('00000000-0000-4000-8000-000000000103', 'sofia@example.com', 'Sofia Mendez', 'borrower', 'Software Engineer', 745, 'pending', null),
+  ('00000000-0000-4000-8000-000000000201', 'james@lendsync.local', 'James Reyes', 'loan_officer', 'Loan Officer', null, 'verified', null)
+on conflict (id) do update set
+  password_hash = coalesce(excluded.password_hash, public.profiles.password_hash),
+  full_name = excluded.full_name,
+  occupation = excluded.occupation,
+  credit_score = excluded.credit_score,
+  kyc_status = excluded.kyc_status;
 
 insert into public.loan_products (
   name, description, loan_type, interest_method, annual_rate_percent,

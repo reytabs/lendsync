@@ -1,5 +1,6 @@
 'use client';
 
+import { useCallback, useEffect, useState } from 'react';
 import {
   Bar,
   BarChart,
@@ -15,103 +16,154 @@ import {
 import { KpiCard } from '@/components/kpi-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { mockDashboard } from '@/lib/mock-data';
+import { api } from '@/lib/api';
+import { money } from '@/lib/utils';
 
-const monthlyApplications = [
-  { month: 'Sep', count: 42 },
-  { month: 'Oct', count: 55 },
-  { month: 'Nov', count: 48 },
-  { month: 'Dec', count: 61 },
-  { month: 'Jan', count: 70 },
-  { month: 'Feb', count: 66 },
-  { month: 'Mar', count: 74 },
-  { month: 'Apr', count: 69 },
-  { month: 'May', count: 82 },
-  { month: 'Jun', count: 77 },
-  { month: 'Jul', count: 88 },
-  { month: 'Aug', count: 86 },
-];
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
-const repaymentQuality = [
-  { month: 'Sep', onTime: 92, late: 6, default: 2 },
-  { month: 'Oct', onTime: 91, late: 7, default: 2 },
-  { month: 'Nov', onTime: 93, late: 5, default: 2 },
-  { month: 'Dec', onTime: 90, late: 7, default: 3 },
-  { month: 'Jan', onTime: 94, late: 4, default: 2 },
-  { month: 'Feb', onTime: 93, late: 5, default: 2 },
-  { month: 'Mar', onTime: 92, late: 6, default: 2 },
-  { month: 'Apr', onTime: 91, late: 6, default: 3 },
-  { month: 'May', onTime: 93, late: 5, default: 2 },
-  { month: 'Jun', onTime: 92, late: 6, default: 2 },
-  { month: 'Jul', onTime: 94, late: 4, default: 2 },
-  { month: 'Aug', onTime: 93, late: 5, default: 2 },
-];
+type ReportKpis = {
+  avgLoanSizeCents: number;
+  avgTenureMonths: number;
+  avgInterestRatePercent: number;
+  defaultRatePercent: number;
+  recoveryRatePercent: number;
+  niiThisMonthCents: number;
+};
+
+type Charts = {
+  monthlyApplications: Array<{ month: string; count: number }>;
+  repaymentQuality: Array<{
+    month: string;
+    onTime: number;
+    late: number;
+    default: number;
+  }>;
+  disbursementVsCollections: Array<{
+    month: string;
+    disbursed: number;
+    collected: number;
+  }>;
+};
 
 export default function ReportsPage() {
+  const [kpis, setKpis] = useState<ReportKpis | null>(null);
+  const [charts, setCharts] = useState<Charts | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [k, c] = await Promise.all([
+        api<ReportKpis>('/reports/kpis'),
+        api<Charts>('/reports/charts'),
+      ]);
+      setKpis(k);
+      setCharts(c);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load reports');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function exportCsv() {
+    const token =
+      typeof window !== 'undefined'
+        ? localStorage.getItem('lms_token')
+        : null;
+    const res = await fetch(`${API_URL}/api/reports/export.csv`, {
+      headers: { Authorization: `Bearer ${token ?? ''}` },
+    });
+    if (!res.ok) {
+      setError('CSV export failed');
+      return;
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'lendsync-report.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  if (loading) {
+    return (
+      <p className="py-10 text-center text-sm text-muted-foreground">
+        Loading reports…
+      </p>
+    );
+  }
+
+  if (!kpis || !charts) {
+    return (
+      <p className="rounded-md border border-chart-red/40 bg-chart-red/10 px-3 py-2 text-sm text-chart-red">
+        {error || 'No report data'}
+      </p>
+    );
+  }
+
   return (
     <div className="space-y-6">
+      {error && (
+        <p className="rounded-md border border-chart-red/40 bg-chart-red/10 px-3 py-2 text-sm text-chart-red">
+          {error}
+        </p>
+      )}
+
       <div className="flex justify-end gap-2">
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => {
-            const csv = 'metric,value\navg_loan_size,82000\ndefault_rate,2.4\n';
-            const blob = new Blob([csv], { type: 'text/csv' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'lendsync-report.csv';
-            a.click();
-          }}
-        >
+        <Button variant="secondary" size="sm" onClick={() => void exportCsv()}>
           Export CSV
-        </Button>
-        <Button variant="secondary" size="sm">
-          Export PDF
         </Button>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <KpiCard
           label="Avg Loan Size"
-          valueCents={8200000}
-          hint="Across active book"
-          delta={4.2}
+          valueCents={kpis.avgLoanSizeCents}
+          hint="Across loan book"
+          delta={null}
           icon={<span />}
         />
         <KpiCard
           label="Avg Tenure"
-          valueText="36 mo"
-          hint="Weighted by principal"
-          delta={1.1}
+          valueText={`${kpis.avgTenureMonths} mo`}
+          hint="Simple average"
+          delta={null}
           icon={<span />}
         />
         <KpiCard
           label="Avg Interest Rate"
-          valueText="11.8%"
+          valueText={`${kpis.avgInterestRatePercent}%`}
           hint="Portfolio APR"
-          delta={-0.3}
+          delta={null}
           icon={<span />}
         />
         <KpiCard
           label="Default Rate"
-          valueText="2.4%"
-          hint="Trailing 12 months"
-          delta={0.2}
+          valueText={`${kpis.defaultRatePercent}%`}
+          hint="Defaulted / all loans"
+          delta={null}
           icon={<span />}
         />
         <KpiCard
           label="Recovery Rate"
-          valueText="91.2%"
-          hint="Collections on defaults"
-          delta={1.5}
+          valueText={`${kpis.recoveryRatePercent}%`}
+          hint="Completed vs defaulted"
+          delta={null}
           icon={<span />}
         />
         <KpiCard
-          label="NII This Month"
-          valueCents={18400000}
-          hint="Net interest income"
-          delta={6.8}
+          label="Collections This Month"
+          valueCents={kpis.niiThisMonthCents}
+          hint="Sum of recorded repayments"
+          delta={null}
           icon={<span />}
         />
       </div>
@@ -121,15 +173,18 @@ export default function ReportsPage() {
           <CardHeader>
             <CardTitle>Monthly Applications Volume</CardTitle>
             <p className="text-xs text-muted-foreground">
-              New loan applications submitted per month
+              New loan applications created per month
             </p>
           </CardHeader>
           <CardContent className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={monthlyApplications}>
-                <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
+              <BarChart data={charts.monthlyApplications}>
+                <CartesianGrid
+                  stroke="rgba(255,255,255,0.06)"
+                  vertical={false}
+                />
                 <XAxis dataKey="month" stroke="#6A6C7E" fontSize={12} />
-                <YAxis stroke="#6A6C7E" fontSize={12} />
+                <YAxis stroke="#6A6C7E" fontSize={12} allowDecimals={false} />
                 <Tooltip
                   contentStyle={{
                     background: '#12141a',
@@ -147,13 +202,16 @@ export default function ReportsPage() {
           <CardHeader>
             <CardTitle>Repayment Quality Trend</CardTitle>
             <p className="text-xs text-muted-foreground">
-              On-time, late, and default rates as % of portfolio
+              Share of installments by outcome (% of due that month)
             </p>
           </CardHeader>
           <CardContent className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={repaymentQuality}>
-                <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
+              <LineChart data={charts.repaymentQuality}>
+                <CartesianGrid
+                  stroke="rgba(255,255,255,0.06)"
+                  vertical={false}
+                />
                 <XAxis dataKey="month" stroke="#6A6C7E" fontSize={12} />
                 <YAxis stroke="#6A6C7E" fontSize={12} />
                 <Tooltip
@@ -164,9 +222,24 @@ export default function ReportsPage() {
                   }}
                 />
                 <Legend />
-                <Line type="monotone" dataKey="onTime" stroke="#4ADE80" strokeWidth={2} />
-                <Line type="monotone" dataKey="late" stroke="#F97316" strokeWidth={2} />
-                <Line type="monotone" dataKey="default" stroke="#F87171" strokeWidth={2} />
+                <Line
+                  type="monotone"
+                  dataKey="onTime"
+                  stroke="#4ADE80"
+                  strokeWidth={2}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="late"
+                  stroke="#F97316"
+                  strokeWidth={2}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="default"
+                  stroke="#F87171"
+                  strokeWidth={2}
+                />
               </LineChart>
             </ResponsiveContainer>
           </CardContent>
@@ -176,12 +249,17 @@ export default function ReportsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Disbursement vs Collections</CardTitle>
-          <p className="text-xs text-muted-foreground">Full-year comparison</p>
+          <p className="text-xs text-muted-foreground">
+            Last 12 months · amounts in USD
+          </p>
         </CardHeader>
         <CardContent className="h-80">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={mockDashboard.series}>
-              <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
+            <BarChart data={charts.disbursementVsCollections}>
+              <CartesianGrid
+                stroke="rgba(255,255,255,0.06)"
+                vertical={false}
+              />
               <XAxis dataKey="month" stroke="#6A6C7E" fontSize={12} />
               <YAxis stroke="#6A6C7E" fontSize={12} />
               <Tooltip
@@ -190,6 +268,7 @@ export default function ReportsPage() {
                   border: '1px solid #2a2d36',
                   borderRadius: 8,
                 }}
+                formatter={(value: number) => money(Math.round(value * 100))}
               />
               <Legend />
               <Bar dataKey="disbursed" fill="#D4A53C" name="Disbursed" />

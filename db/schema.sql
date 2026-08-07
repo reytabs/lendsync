@@ -162,6 +162,33 @@ create table if not exists public.audit_logs (
   created_at timestamptz not null default now()
 );
 
+do $$ begin
+  create type public.notification_kind as enum (
+    'loan_submitted', 'loan_approved', 'loan_rejected',
+    'loan_disbursed', 'payment_recorded', 'emi_overdue', 'emi_due_soon'
+  );
+exception when duplicate_object then null; end $$;
+
+create table if not exists public.notifications (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  kind public.notification_kind not null,
+  title text not null,
+  body text not null,
+  href text,
+  entity_type text,
+  entity_id text,
+  read_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists notifications_user_created_idx
+  on public.notifications (user_id, created_at desc);
+
+create index if not exists notifications_user_unread_idx
+  on public.notifications (user_id, created_at desc)
+  where read_at is null;
+
 create table if not exists public.system_settings (
   key text primary key,
   value jsonb not null,
