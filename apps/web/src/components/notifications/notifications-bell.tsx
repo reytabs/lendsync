@@ -3,11 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Bell } from 'lucide-react';
-import { api } from '@/lib/api';
+import { api, apiBaseUrl } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
 type NotificationItem = {
   id: string;
@@ -73,7 +71,7 @@ export function NotificationsBell() {
         : null;
     if (!token) return;
 
-    const url = `${API_URL}/api/notifications/stream?access_token=${encodeURIComponent(token)}`;
+    const url = `${apiBaseUrl()}/api/notifications/stream?access_token=${encodeURIComponent(token)}`;
     const es = new EventSource(url);
 
     es.onmessage = (ev) => {

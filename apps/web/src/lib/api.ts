@@ -1,4 +1,10 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+const API_URL = (
+  process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
+).replace(/\/+$/, '');
+
+export function apiBaseUrl() {
+  return API_URL;
+}
 
 export async function api<T>(
   path: string,

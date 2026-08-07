@@ -16,10 +16,8 @@ import {
 import { KpiCard } from '@/components/kpi-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { api } from '@/lib/api';
+import { api, apiBaseUrl } from '@/lib/api';
 import { money } from '@/lib/utils';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
 type ReportKpis = {
   avgLoanSizeCents: number;
@@ -77,7 +75,7 @@ export default function ReportsPage() {
       typeof window !== 'undefined'
         ? localStorage.getItem('lms_token')
         : null;
-    const res = await fetch(`${API_URL}/api/reports/export.csv`, {
+    const res = await fetch(`${apiBaseUrl()}/api/reports/export.csv`, {
       headers: { Authorization: `Bearer ${token ?? ''}` },
     });
     if (!res.ok) {

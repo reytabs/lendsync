@@ -5,8 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { homeForRole, setStoredAuth } from '@/lib/auth';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+import { apiBaseUrl } from '@/lib/api';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -20,7 +19,7 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${API_URL}/api/auth/login`, {
+      const res = await fetch(`${apiBaseUrl()}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
