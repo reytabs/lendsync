@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
-import { money } from '@/lib/utils';
+import { Money } from '@/components/money';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
@@ -92,7 +92,7 @@ export default function PortalLoansPage() {
                       {typeLabel[row.loan_type] ?? row.loan_type}
                     </td>
                     <td className="money py-3">
-                      {money(Number(row.principal_cents))}
+                      <Money cents={Number(row.principal_cents)} />
                     </td>
                     <td className="py-3 text-muted-foreground">
                       {row.tenure_months} mo

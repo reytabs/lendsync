@@ -17,6 +17,7 @@ import { KpiCard } from '@/components/kpi-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { api, apiBaseUrl } from '@/lib/api';
+import { useCurrency } from '@/lib/currency';
 import { money } from '@/lib/utils';
 
 type ReportKpis = {
@@ -44,6 +45,7 @@ type Charts = {
 };
 
 export default function ReportsPage() {
+  const currency = useCurrency();
   const [kpis, setKpis] = useState<ReportKpis | null>(null);
   const [charts, setCharts] = useState<Charts | null>(null);
   const [loading, setLoading] = useState(true);
@@ -248,7 +250,7 @@ export default function ReportsPage() {
         <CardHeader>
           <CardTitle>Disbursement vs Collections</CardTitle>
           <p className="text-xs text-muted-foreground">
-            Last 12 months · amounts in USD
+            Last 12 months · amounts in {currency}
           </p>
         </CardHeader>
         <CardContent className="h-80">

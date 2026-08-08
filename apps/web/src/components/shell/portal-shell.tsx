@@ -14,6 +14,8 @@ import {
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { Logo } from '@/components/logo';
+import { ThemeToggle } from '@/components/theme-toggle';
 import { clearStoredAuth, type AuthSession } from '@/lib/auth';
 import { NotificationsBell } from '@/components/notifications/notifications-bell';
 
@@ -112,11 +114,7 @@ export function PortalShell({
         )}
       >
         <div className="flex h-14 items-center gap-2 border-b border-sidebar-border px-4">
-          <img
-            src="/logo.png"
-            alt="LendSync"
-            className="h-6 w-6 rounded-[4px] object-cover shadow-[0_0_12px_rgba(212,165,60,0.35)]"
-          />
+          <Logo className="h-6 w-6 rounded-[4px] object-cover" />
           {!collapsed && (
             <div>
               <div className="font-display text-sm font-semibold tracking-tight">
@@ -192,6 +190,7 @@ export function PortalShell({
             <p className="text-xs text-muted-foreground">{meta.subtitle}</p>
           </div>
           <div className="flex items-center gap-3">
+            <ThemeToggle />
             <NotificationsBell />
             <Button
               variant="secondary"

@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Logo } from '@/components/logo';
+import { ThemeToggle } from '@/components/theme-toggle';
 import { homeForRole, setStoredAuth } from '@/lib/auth';
 import { apiBaseUrl } from '@/lib/api';
 
@@ -42,13 +44,12 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
+      <div className="absolute right-4 top-4">
+        <ThemeToggle />
+      </div>
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
-          <img
-            src="/logo.png"
-            alt="LendSync"
-            className="mx-auto mb-4 h-12 w-12 rounded-[8px] object-cover shadow-[0_0_24px_rgba(212,165,60,0.4)]"
-          />
+          <Logo className="mx-auto mb-4 h-12 w-12 rounded-[8px] object-cover" />
           <h1 className="font-display text-3xl font-semibold tracking-tight">
             LendSync
           </h1>

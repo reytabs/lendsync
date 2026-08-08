@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
-import { money } from '@/lib/utils';
+import { Money } from '@/components/money';
+import { useCurrency } from '@/lib/currency';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,6 +33,7 @@ const steps = ['Product', 'Terms', 'Purpose', 'Review'] as const;
 
 export default function PortalApplyPage() {
   const router = useRouter();
+  const currency = useCurrency();
   const [step, setStep] = useState(0);
   const [products, setProducts] = useState<Product[]>([]);
   const [productId, setProductId] = useState('');
@@ -163,8 +165,8 @@ export default function PortalApplyPage() {
                 <div className="font-semibold">{p.name}</div>
                 <div className="text-xs text-muted-foreground">
                   {Number(p.annual_rate_percent)}% ·{' '}
-                  {money(Number(p.min_amount_cents))}–
-                  {money(Number(p.max_amount_cents))} · {p.min_tenure_months}–
+                  <Money cents={Number(p.min_amount_cents)} />–
+                  <Money cents={Number(p.max_amount_cents)} /> · {p.min_tenure_months}–
                   {p.max_tenure_months} months
                 </div>
               </button>
@@ -181,7 +183,7 @@ export default function PortalApplyPage() {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <label className="block space-y-1.5 text-sm">
-                <span className="text-muted-foreground">Amount (USD)</span>
+                <span className="text-muted-foreground">Amount ({currency})</span>
                 <Input
                   type="number"
                   value={amount}
@@ -198,8 +200,8 @@ export default function PortalApplyPage() {
               </label>
             </div>
             <p className="text-xs text-muted-foreground">
-              Allowed {money(Number(product.min_amount_cents))}–
-              {money(Number(product.max_amount_cents))},{' '}
+              Allowed <Money cents={Number(product.min_amount_cents)} />–
+              <Money cents={Number(product.max_amount_cents)} />,{' '}
               {product.min_tenure_months}–{product.max_tenure_months} months
             </p>
             {emi && (
@@ -209,7 +211,7 @@ export default function PortalApplyPage() {
                     Monthly EMI
                   </div>
                   <div className="money text-sm font-semibold text-primary">
-                    {money(emi.monthlyEmiCents)}
+                    <Money cents={emi.monthlyEmiCents} />
                   </div>
                 </div>
                 <div>
@@ -217,7 +219,7 @@ export default function PortalApplyPage() {
                     Total interest
                   </div>
                   <div className="money text-sm font-semibold">
-                    {money(emi.totalInterestCents)}
+                    <Money cents={emi.totalInterestCents} />
                   </div>
                 </div>
                 <div>
@@ -225,7 +227,7 @@ export default function PortalApplyPage() {
                     Total payable
                   </div>
                   <div className="money text-sm font-semibold">
-                    {money(emi.totalRepaymentCents)}
+                    <Money cents={emi.totalRepaymentCents} />
                   </div>
                 </div>
               </div>
@@ -261,12 +263,15 @@ export default function PortalApplyPage() {
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             <Row label="Product" value={product.name} />
-            <Row label="Amount" value={money(Math.round(Number(amount) * 100))} />
+            <Row
+              label="Amount"
+              value={<Money cents={Math.round(Number(amount) * 100)} />}
+            />
             <Row label="Tenure" value={`${tenure} months`} />
             <Row label="Rate" value={`${Number(product.annual_rate_percent)}%`} />
             <Row label="Purpose" value={purpose || '—'} />
             {emi && (
-              <Row label="Est. EMI" value={money(emi.monthlyEmiCents)} />
+              <Row label="Est. EMI" value={<Money cents={emi.monthlyEmiCents} />} />
             )}
           </CardContent>
         </Card>
@@ -307,7 +312,13 @@ export default function PortalApplyPage() {
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
   return (
     <div className="flex justify-between border-b border-border/50 py-2">
       <span className="text-muted-foreground">{label}</span>

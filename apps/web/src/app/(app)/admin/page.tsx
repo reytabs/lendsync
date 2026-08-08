@@ -1,23 +1,94 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { api } from '@/lib/api';
+import { broadcastCurrency } from '@/lib/currency';
 import { cn } from '@/lib/utils';
 
 const tabs = ['General', 'Users & Roles', 'Integrations', 'Security'] as const;
 
+const currencyOptions = [
+  { code: 'USD', label: 'USD — US Dollar ($)' },
+  { code: 'PHP', label: 'PHP — Philippine Peso (₱)' },
+] as const;
+
+type OrganizationSettings = { name?: string; currency?: string };
+type SettingsResponse = {
+  organization?: OrganizationSettings;
+};
+
 export default function AdminPage() {
   const [tab, setTab] = useState<(typeof tabs)[number]>('General');
-  const [orgName, setOrgName] = useState('LendSync');
-  const [currency, setCurrency] = useState('USD');
+  const [orgName, setOrgName] = useState('');
+  const [currency, setCurrency] = useState('');
+  const [generalLoading, setGeneralLoading] = useState(true);
+  const [generalSaving, setGeneralSaving] = useState(false);
+  const [generalError, setGeneralError] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteName, setInviteName] = useState('');
   const [require2fa, setRequire2fa] = useState(false);
   const [enforceTls, setEnforceTls] = useState(true);
   const [autoBackups, setAutoBackups] = useState(true);
+
+  const loadSettings = useCallback(async () => {
+    setGeneralLoading(true);
+    setGeneralError('');
+    try {
+      const data = await api<SettingsResponse>('/admin/settings');
+      setOrgName(data.organization?.name ?? 'LendSync');
+      const loaded = (data.organization?.currency ?? 'USD').toUpperCase();
+      const supported = currencyOptions.some((o) => o.code === loaded);
+      setCurrency(supported ? loaded : 'USD');
+    } catch (err) {
+      setGeneralError(
+        err instanceof Error ? err.message : 'Failed to load settings',
+      );
+      setOrgName('LendSync');
+      setCurrency('USD');
+    } finally {
+      setGeneralLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadSettings();
+  }, [loadSettings]);
+
+  async function saveGeneral() {
+    if (!orgName.trim()) {
+      setGeneralError('Organization name is required');
+      return;
+    }
+    const nextCurrency = (currency.trim() || 'USD').toUpperCase();
+    setGeneralSaving(true);
+    setGeneralError('');
+    try {
+      await api('/admin/settings', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          key: 'organization',
+          value: {
+            name: orgName.trim(),
+            currency: nextCurrency,
+          },
+        }),
+      });
+      setCurrency(nextCurrency);
+      broadcastCurrency(nextCurrency);
+      toast.success('Settings saved');
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Failed to save settings';
+      setGeneralError(message);
+      toast.error(message);
+    } finally {
+      setGeneralSaving(false);
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -44,17 +115,39 @@ export default function AdminPage() {
             <CardTitle>General settings</CardTitle>
           </CardHeader>
           <CardContent className="max-w-lg space-y-4">
-            <Field label="Organization name">
-              <Input value={orgName} onChange={(e) => setOrgName(e.target.value)} />
-            </Field>
-            <Field label="Currency">
-              <Input value={currency} onChange={(e) => setCurrency(e.target.value)} />
-            </Field>
-            <Button
-              onClick={() => toast.success('Settings saved')}
-            >
-              Save changes
-            </Button>
+            {generalLoading ? (
+              <p className="text-sm text-muted-foreground">Loading settings…</p>
+            ) : (
+              <>
+                {generalError && (
+                  <p className="rounded-md border border-chart-red/40 bg-chart-red/10 px-3 py-2 text-sm text-chart-red">
+                    {generalError}
+                  </p>
+                )}
+                <Field label="Organization name">
+                  <Input
+                    value={orgName}
+                    onChange={(e) => setOrgName(e.target.value)}
+                  />
+                </Field>
+                <Field label="Currency">
+                  <select
+                    value={currency}
+                    onChange={(e) => setCurrency(e.target.value)}
+                    className="flex h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  >
+                    {currencyOptions.map((opt) => (
+                      <option key={opt.code} value={opt.code}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Button onClick={() => void saveGeneral()} disabled={generalSaving}>
+                  {generalSaving ? 'Saving…' : 'Save changes'}
+                </Button>
+              </>
+            )}
           </CardContent>
         </Card>
       )}

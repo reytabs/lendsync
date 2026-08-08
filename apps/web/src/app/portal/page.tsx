@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
+import { Money } from '@/components/money';
 import { money, formatDate } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -202,7 +203,7 @@ export default function PortalHomePage() {
                       </Link>
                     </td>
                     <td className="money py-3">
-                      {money(Number(row.principal_cents))}
+                      <Money cents={Number(row.principal_cents)} />
                     </td>
                     <td className="py-3">
                       <StatusBadge status={row.status} />

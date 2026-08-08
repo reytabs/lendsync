@@ -23,6 +23,7 @@ import { KpiCard } from '@/components/kpi-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { api } from '@/lib/api';
+import { Money } from '@/components/money';
 import { formatDate, money } from '@/lib/utils';
 import Link from 'next/link';
 
@@ -221,7 +222,7 @@ export default function DashboardPage() {
           <CardHeader>
             <CardTitle>Portfolio Breakdown</CardTitle>
             <p className="text-xs text-muted-foreground">
-              By loan type · {money(portfolioTotal)} active
+              By loan type · <Money cents={portfolioTotal} /> active
             </p>
           </CardHeader>
           <CardContent>
@@ -318,7 +319,7 @@ export default function DashboardPage() {
                       {typeLabel[row.loan_type] ?? row.loan_type}
                     </td>
                     <td className="money py-3">
-                      {money(Number(row.principal_cents))}
+                      <Money cents={Number(row.principal_cents)} />
                     </td>
                     <td className="py-3">
                       <StatusBadge status={row.status} />

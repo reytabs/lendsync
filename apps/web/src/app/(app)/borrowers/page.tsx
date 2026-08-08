@@ -7,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
-import { money } from '@/lib/utils';
+import { Money } from '@/components/money';
 
 type Borrower = {
   id: string;
@@ -246,7 +246,7 @@ export default function BorrowersPage() {
                     </div>
                     <div>
                       <div className="money text-sm font-semibold">
-                        {money(Number(b.total_borrowed_cents ?? 0))}
+                        <Money cents={Number(b.total_borrowed_cents ?? 0)} />
                       </div>
                       <div className="text-[10px] text-muted-foreground">
                         Total Borrowed

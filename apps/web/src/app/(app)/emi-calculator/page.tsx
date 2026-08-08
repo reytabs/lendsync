@@ -13,7 +13,7 @@ import {
   YAxis,
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { money } from '@/lib/utils';
+import { Money } from '@/components/money';
 
 export default function EmiCalculatorPage() {
   const [principal, setPrincipal] = useState(100000);
@@ -46,7 +46,7 @@ export default function EmiCalculatorPage() {
         <CardContent className="space-y-6">
           <SliderField
             label="Principal Amount"
-            valueLabel={money(Math.round(principal * 100))}
+            valueLabel={<Money cents={Math.round(principal * 100)} />}
             min={1000}
             max={500000}
             step={1000}
@@ -72,14 +72,17 @@ export default function EmiCalculatorPage() {
             onChange={setTenure}
           />
           <div className="space-y-3 rounded-md border border-border bg-black/20 p-4">
-            <Metric label="Monthly EMI" value={money(result.monthlyEmiCents)} />
+            <Metric
+              label="Monthly EMI"
+              value={<Money cents={result.monthlyEmiCents} />}
+            />
             <Metric
               label="Total Repayment"
-              value={money(result.totalRepaymentCents)}
+              value={<Money cents={result.totalRepaymentCents} />}
             />
             <Metric
               label="Interest Paid"
-              value={money(result.totalInterestCents)}
+              value={<Money cents={result.totalInterestCents} />}
             />
           </div>
         </CardContent>
@@ -133,10 +136,10 @@ export default function EmiCalculatorPage() {
                   <tr key={row.month} className="border-b border-border/50">
                     <td className="py-2">{row.month}</td>
                     <td className="py-2 text-muted-foreground">{row.dueDate}</td>
-                    <td className="money py-2">{money(row.paymentCents)}</td>
-                    <td className="money py-2">{money(row.principalCents)}</td>
-                    <td className="money py-2">{money(row.interestCents)}</td>
-                    <td className="money py-2">{money(row.balanceCents)}</td>
+                    <td className="money py-2"><Money cents={row.paymentCents} /></td>
+                    <td className="money py-2"><Money cents={row.principalCents} /></td>
+                    <td className="money py-2"><Money cents={row.interestCents} /></td>
+                    <td className="money py-2"><Money cents={row.balanceCents} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -158,7 +161,7 @@ function SliderField({
   onChange,
 }: {
   label: string;
-  valueLabel: string;
+  valueLabel: React.ReactNode;
   min: number;
   max: number;
   step: number;
@@ -186,7 +189,13 @@ function SliderField({
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function Metric({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
   return (
     <div className="flex items-center justify-between">
       <span className="text-xs text-muted-foreground">{label}</span>

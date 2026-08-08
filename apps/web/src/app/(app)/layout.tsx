@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { AppShell } from '@/components/shell/app-shell';
+import { CurrencyProvider } from '@/lib/currency';
 import { useAuthGate } from '@/lib/auth';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -22,5 +23,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
-  return <AppShell>{children}</AppShell>;
+  return (
+    <CurrencyProvider>
+      <AppShell>{children}</AppShell>
+    </CurrencyProvider>
+  );
 }

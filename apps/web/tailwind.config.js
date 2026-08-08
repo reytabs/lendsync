@@ -35,8 +35,12 @@ module.exports = {
         },
       },
       fontFamily: {
-        display: ['var(--font-fraunces)', 'serif'],
-        sans: ['var(--font-geist)', 'system-ui', 'sans-serif'],
+        // Outfit is used for both display (headings) and body text; DM Mono for
+        // numerics/tabular. Glyphs missing from these faces — e.g. the peso sign
+        // ₱ (U+20B1) — fall back to system-ui, and are size-normalized via the
+        // `.money-symbol` rule in globals.css.
+        display: ['var(--font-outfit)', 'system-ui', 'sans-serif'],
+        sans: ['var(--font-outfit)', 'system-ui', 'sans-serif'],
         mono: ['var(--font-dm-mono)', 'ui-monospace', 'monospace'],
       },
       borderRadius: {

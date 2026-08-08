@@ -7,6 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
+import { Money } from '@/components/money';
+import { useCurrency } from '@/lib/currency';
 import { cn, money } from '@/lib/utils';
 
 const filters = [
@@ -92,6 +94,7 @@ function formatDate(value: string) {
 }
 
 export default function ApplicationsPage() {
+  const currency = useCurrency();
   const [filter, setFilter] = useState<(typeof filters)[number]>('all');
   const [page, setPage] = useState(1);
   const [applications, setApplications] = useState<ApplicationRow[]>([]);
@@ -367,7 +370,7 @@ export default function ApplicationsPage() {
                         {typeLabel[row.loan_type] ?? row.loan_type}
                       </td>
                       <td className="money py-3">
-                        {money(Number(row.principal_cents))}
+                        <Money cents={Number(row.principal_cents)} />
                       </td>
                       <td className="py-3">
                         <StatusBadge status={row.status} />
@@ -501,8 +504,8 @@ export default function ApplicationsPage() {
               {selectedProduct && (
                 <p className="text-xs text-muted-foreground">
                   Amount{' '}
-                  {money(Number(selectedProduct.min_amount_cents))}–
-                  {money(Number(selectedProduct.max_amount_cents))} · Tenure{' '}
+                  <Money cents={Number(selectedProduct.min_amount_cents)} />–
+                  <Money cents={Number(selectedProduct.max_amount_cents)} /> · Tenure{' '}
                   {selectedProduct.min_tenure_months}–
                   {selectedProduct.max_tenure_months} months
                 </p>
@@ -510,7 +513,7 @@ export default function ApplicationsPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <label className="block space-y-1.5 text-sm">
-                  <span className="text-muted-foreground">Amount (USD)</span>
+                  <span className="text-muted-foreground">Amount ({currency})</span>
                   <Input
                     type="number"
                     min={1}
@@ -588,7 +591,7 @@ export default function ApplicationsPage() {
                 </h2>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {borrowerName(decisionRow)} ·{' '}
-                  {money(Number(decisionRow.principal_cents))} ·{' '}
+                  <Money cents={Number(decisionRow.principal_cents)} /> ·{' '}
                   {typeLabel[decisionRow.loan_type] ?? decisionRow.loan_type}
                 </p>
               </div>

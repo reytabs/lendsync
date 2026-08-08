@@ -18,6 +18,8 @@ import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Logo } from '@/components/logo';
+import { ThemeToggle } from '@/components/theme-toggle';
 import { NotificationsBell } from '@/components/notifications/notifications-bell';
 
 const mainNav = [
@@ -112,11 +114,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         )}
       >
         <div className="flex h-14 items-center gap-2 border-b border-sidebar-border px-4">
-          <img
-            src="/logo.png"
-            alt="LendSync"
-            className="h-6 w-6 rounded-[4px] object-cover shadow-[0_0_12px_rgba(212,165,60,0.35)]"
-          />
+          <Logo className="h-6 w-6 rounded-[4px] object-cover" />
           {!collapsed && (
             <div>
               <div className="font-display text-sm font-semibold tracking-tight">
@@ -209,6 +207,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 placeholder="Quick search…"
               />
             </div>
+            <ThemeToggle />
             <NotificationsBell />
             <Button
               variant="secondary"

@@ -1,6 +1,7 @@
 'use client';
 
 import { PortalShell } from '@/components/shell/portal-shell';
+import { CurrencyProvider } from '@/lib/currency';
 import { useAuthGate } from '@/lib/auth';
 
 export default function PortalLayout({
@@ -21,5 +22,9 @@ export default function PortalLayout({
     );
   }
 
-  return <PortalShell session={session}>{children}</PortalShell>;
+  return (
+    <CurrencyProvider>
+      <PortalShell session={session}>{children}</PortalShell>
+    </CurrencyProvider>
+  );
 }

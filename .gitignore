@@ -12,3 +12,4 @@ apps/backend/dist
 apps/web/.next
 .vercel
 .env*
+*.tsbuildinfo

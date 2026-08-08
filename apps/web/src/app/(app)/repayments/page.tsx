@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
-import { money } from '@/lib/utils';
+import { Money } from '@/components/money';
+import { useCurrency } from '@/lib/currency';
 
 type Installment = {
   id: string;
@@ -60,6 +61,7 @@ function shortId(id: string) {
 }
 
 export default function RepaymentsPage() {
+  const currency = useCurrency();
   const [loans, setLoans] = useState<DueLoan[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -213,13 +215,13 @@ export default function RepaymentsPage() {
                         </div>
                       </td>
                       <td className="money py-3">
-                        {money(Number(loan.principal_cents))}
+                        <Money cents={Number(loan.principal_cents)} />
                       </td>
                       <td className="py-3">
                         <StatusBadge status={loan.status} />
                       </td>
                       <td className="money py-3">
-                        {next ? money(Number(next.total_cents)) : '—'}
+                        {next ? <Money cents={Number(next.total_cents)} /> : '—'}
                         {next && (
                           <div className="mt-1 flex items-center gap-2">
                             <StatusBadge status={next.status} />
@@ -236,19 +238,19 @@ export default function RepaymentsPage() {
                         {next ? (
                           <>
                             <div className="money text-chart-green">
-                              {money(Number(next.paid_cents ?? 0))} paid
+                              <Money cents={Number(next.paid_cents ?? 0)} /> paid
                             </div>
                             <div className="money text-xs text-muted-foreground">
-                              {money(
-                                Number(
+                              <Money
+                                cents={Number(
                                   next.remaining_cents ??
                                     Math.max(
                                       0,
                                       Number(next.total_cents) -
                                         Number(next.paid_cents ?? 0),
                                     ),
-                                ),
-                              )}{' '}
+                                )}
+                              />{' '}
                               left
                             </div>
                           </>
@@ -333,25 +335,25 @@ export default function RepaymentsPage() {
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">EMI total</span>
                       <span className="money">
-                        {money(Number(next.total_cents))}
+                        <Money cents={Number(next.total_cents)} />
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Already paid</span>
                       <span className="money text-chart-green">
-                        {money(paid)}
+                        <Money cents={paid} />
                       </span>
                     </div>
                     <div className="flex justify-between border-t border-border/60 pt-2 font-medium">
                       <span>Remaining</span>
-                      <span className="money">{money(remaining)}</span>
+                      <span className="money"><Money cents={remaining} /></span>
                     </div>
                     <div className="flex justify-between text-xs text-muted-foreground">
                       <span>
-                        Principal {money(Number(next.principal_cents))}
+                        Principal <Money cents={Number(next.principal_cents)} />
                       </span>
                       <span>
-                        Interest {money(Number(next.interest_cents))}
+                        Interest <Money cents={Number(next.interest_cents)} />
                       </span>
                     </div>
                     {next.status === 'partial' && (
@@ -366,7 +368,7 @@ export default function RepaymentsPage() {
 
               <label className="block space-y-1.5 text-sm">
                 <span className="text-muted-foreground">
-                  Amount received now (USD)
+                  Amount received now ({currency})
                 </span>
                 <Input
                   type="number"

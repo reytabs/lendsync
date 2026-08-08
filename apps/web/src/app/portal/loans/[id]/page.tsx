@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
-import { money, formatDate } from '@/lib/utils';
+import { Money } from '@/components/money';
+import { formatDate } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -98,7 +99,7 @@ export default function PortalLoanDetailPage() {
           </Button>
           <div className="mt-2 flex items-center gap-3">
             <h2 className="font-display text-xl font-semibold">
-              {money(Number(app.principal_cents))} · {app.tenure_months} months
+              <Money cents={Number(app.principal_cents)} /> · {app.tenure_months} months
             </h2>
             <StatusBadge status={app.status} />
           </div>
@@ -130,7 +131,7 @@ export default function PortalLoanDetailPage() {
           <CardContent className="p-4">
             <div className="text-xs text-muted-foreground">Outstanding EMI</div>
             <div className="money mt-1 text-xl font-semibold">
-              {money(outstanding)}
+              <Money cents={outstanding} />
             </div>
           </CardContent>
         </Card>
@@ -189,10 +190,10 @@ export default function PortalLoanDetailPage() {
                       <td className="py-2 font-mono text-xs">{row.installment_no}</td>
                       <td className="py-2">{formatDate(row.due_date)}</td>
                       <td className="money py-2">
-                        {money(Number(row.total_cents))}
+                        <Money cents={Number(row.total_cents)} />
                       </td>
-                      <td className="money py-2">{money(paid)}</td>
-                      <td className="money py-2">{money(remaining)}</td>
+                      <td className="money py-2"><Money cents={paid} /></td>
+                      <td className="money py-2"><Money cents={remaining} /></td>
                       <td className="py-2">
                         <StatusBadge status={row.status} />
                       </td>

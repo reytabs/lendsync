@@ -1,4 +1,5 @@
-import { cn, money, pct } from '@/lib/utils';
+import { Money } from '@/components/money';
+import { cn, pct } from '@/lib/utils';
 
 export function KpiCard({
   label,
@@ -24,7 +25,7 @@ export function KpiCard({
       <div className="absolute right-4 top-4 text-primary/80">{icon}</div>
       <div className="text-xs text-muted-foreground">{label}</div>
       <div className="money mt-2 text-2xl font-semibold text-foreground">
-        {valueText ?? (valueCents != null ? money(valueCents) : '—')}
+        {valueText ?? (valueCents != null ? <Money cents={valueCents} /> : '—')}
       </div>
       <div className="mt-2 flex items-center justify-between gap-2 text-xs">
         <span className="text-muted-foreground">{hint}</span>

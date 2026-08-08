@@ -1,23 +1,22 @@
-import { Fraunces, DM_Mono, IBM_Plex_Sans } from 'next/font/google';
+import localFont from 'next/font/local';
 import type { Metadata } from 'next';
 import { Toaster } from 'sonner';
 import './globals.css';
 
-const fraunces = Fraunces({
-  subsets: ['latin'],
-  variable: '--font-fraunces',
+const outfit = localFont({
+  src: './fonts/Outfit-Variable.ttf',
+  weight: '100 900',
+  variable: '--font-outfit',
+  display: 'swap',
 });
 
-const dmMono = DM_Mono({
-  weight: ['400', '500'],
-  subsets: ['latin'],
+const dmMono = localFont({
+  src: [
+    { path: './fonts/DMMono-Regular.ttf', weight: '400', style: 'normal' },
+    { path: './fonts/DMMono-Medium.ttf', weight: '500', style: 'normal' },
+  ],
   variable: '--font-dm-mono',
-});
-
-const plex = IBM_Plex_Sans({
-  weight: ['400', '500', '600'],
-  subsets: ['latin'],
-  variable: '--font-geist',
+  display: 'swap',
 });
 
 export const metadata: Metadata = {
@@ -30,16 +29,21 @@ export const metadata: Metadata = {
   },
 };
 
+const themeScript = `(function(){try{var t=localStorage.getItem('lms_theme');if(t!=='light'&&t!=='dark'){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}var d=document.documentElement;d.classList.toggle('dark',t==='dark');d.style.colorScheme=t;}catch(e){document.documentElement.classList.add('dark');document.documentElement.style.colorScheme='dark';}})();`;
+
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
-      <body className={`${fraunces.variable} ${dmMono.variable} ${plex.variable} font-sans`}>
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
+      <body className={`${outfit.variable} ${dmMono.variable} font-sans`}>
         {children}
-        <Toaster theme="dark" richColors position="top-right" />
+        <Toaster richColors position="top-right" />
       </body>
     </html>
   );
