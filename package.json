@@ -16,8 +16,11 @@
     "db:migrate:create": "node-pg-migrate create -m db/migrations --",
     "start:backend": "pnpm --filter @lms/backend start"
   },
-  "devDependencies": {
+  "dependencies": {
     "node-pg-migrate": "^7.9.0",
+    "pg": "^8.22.0"
+  },
+  "devDependencies": {
     "turbo": "^2.3.3",
     "typescript": "^5.7.2"
   }

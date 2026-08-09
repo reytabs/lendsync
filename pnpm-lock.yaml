@@ -7,10 +7,14 @@ settings:
 importers:
 
   .:
-    devDependencies:
+    dependencies:
       node-pg-migrate:
         specifier: ^7.9.0
         version: 7.9.1(@types/pg@8.21.0)(pg@8.22.0)
+      pg:
+        specifier: ^8.22.0
+        version: 8.22.0
+    devDependencies:
       turbo:
         specifier: ^2.3.3
         version: 2.10.8
