@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { AppShell } from '@/components/shell/app-shell';
+import { AppShellSkeleton } from '@/components/skeletons';
 import { CurrencyProvider } from '@/lib/currency';
 import { useAuthGate } from '@/lib/auth';
 
@@ -16,11 +17,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, []);
 
   if (!ready) {
-    return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
-        Loading…
-      </div>
-    );
+    return <AppShellSkeleton />;
   }
 
   return (

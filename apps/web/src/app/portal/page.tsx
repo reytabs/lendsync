@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { Money } from '@/components/money';
+import { PortalHomeSkeleton } from '@/components/skeletons';
 import { money, formatDate } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -113,9 +114,7 @@ export default function PortalHomePage() {
   const recent = apps.slice(0, 5);
 
   if (loading) {
-    return (
-      <p className="text-sm text-muted-foreground">Loading your portal…</p>
-    );
+    return <PortalHomeSkeleton />;
   }
 
   return (

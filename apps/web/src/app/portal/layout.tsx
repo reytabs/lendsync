@@ -1,6 +1,7 @@
 'use client';
 
 import { PortalShell } from '@/components/shell/portal-shell';
+import { AppShellSkeleton } from '@/components/skeletons';
 import { CurrencyProvider } from '@/lib/currency';
 import { useAuthGate } from '@/lib/auth';
 
@@ -15,11 +16,7 @@ export default function PortalLayout({
   });
 
   if (!ready || !session) {
-    return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
-        Loading portal…
-      </div>
-    );
+    return <AppShellSkeleton />;
   }
 
   return (

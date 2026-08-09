@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
 import { Money } from '@/components/money';
+import { TableSkeleton } from '@/components/skeletons';
 import { useCurrency } from '@/lib/currency';
 
 type Installment = {
@@ -183,9 +184,7 @@ export default function RepaymentsPage() {
         </CardHeader>
         <CardContent className="overflow-x-auto">
           {loading ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              Loading loans…
-            </p>
+            <TableSkeleton rows={6} cols={6} />
           ) : loans.length === 0 ? (
             <p className="py-10 text-center text-sm text-muted-foreground">
               No approved or active loans yet. Approve an application first.

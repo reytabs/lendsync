@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
 import { Money } from '@/components/money';
+import { TableSkeleton } from '@/components/skeletons';
 import { useCurrency } from '@/lib/currency';
 import { cn, money } from '@/lib/utils';
 
@@ -347,9 +348,7 @@ export default function ApplicationsPage() {
         </CardHeader>
         <CardContent className="overflow-x-auto">
           {loading ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              Loading applications…
-            </p>
+            <TableSkeleton rows={6} cols={6} />
           ) : rows.length === 0 ? (
             <div className="py-10 text-center">
               <p className="text-sm text-muted-foreground">

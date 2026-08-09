@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
 import { Money } from '@/components/money';
+import { CardGridSkeleton } from '@/components/skeletons';
 
 type Borrower = {
   id: string;
@@ -184,9 +185,7 @@ export default function BorrowersPage() {
       )}
 
       {loading ? (
-        <p className="py-10 text-center text-sm text-muted-foreground">
-          Loading borrowers…
-        </p>
+        <CardGridSkeleton count={6} />
       ) : filtered.length === 0 ? (
         <div className="py-12 text-center">
           <p className="text-sm text-muted-foreground">No borrowers found.</p>

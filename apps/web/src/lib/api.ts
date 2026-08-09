@@ -2,9 +2,17 @@ const API_URL = (
   process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 ).replace(/\/+$/, '');
 
+// Artificial delay (ms) applied to GET requests so loading skeletons are
+// visible. Configure via NEXT_PUBLIC_API_DELAY_MS; set to 0 to disable.
+const rawDelay = process.env.NEXT_PUBLIC_API_DELAY_MS;
+const API_DELAY_MS =
+  rawDelay != null && rawDelay !== '' ? Number(rawDelay) : 800;
+
 export function apiBaseUrl() {
   return API_URL;
 }
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function api<T>(
   path: string,
@@ -17,6 +25,11 @@ export async function api<T>(
       ? localStorage.getItem('lms_token')
       : null) ??
     'dev-admin-token';
+
+  const method = (rest.method ?? 'GET').toUpperCase();
+  if (method === 'GET' && API_DELAY_MS > 0) {
+    await sleep(API_DELAY_MS);
+  }
 
   const res = await fetch(`${API_URL}/api${path}`, {
     ...rest,

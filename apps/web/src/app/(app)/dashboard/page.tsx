@@ -24,6 +24,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { api } from '@/lib/api';
 import { Money } from '@/components/money';
+import { DashboardSkeleton } from '@/components/skeletons';
 import { formatDate, money } from '@/lib/utils';
 import Link from 'next/link';
 
@@ -95,11 +96,7 @@ export default function DashboardPage() {
   }, [load]);
 
   if (loading) {
-    return (
-      <p className="py-10 text-center text-sm text-muted-foreground">
-        Loading dashboard…
-      </p>
-    );
+    return <DashboardSkeleton />;
   }
 
   if (!data) {

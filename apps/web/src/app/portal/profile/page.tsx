@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { FormSkeleton } from '@/components/skeletons';
 
 type Profile = {
   id: string;
@@ -68,7 +69,16 @@ export default function PortalProfilePage() {
   }
 
   if (!profile) {
-    return <p className="text-sm text-muted-foreground">Loading profile…</p>;
+    return (
+      <Card className="max-w-lg">
+        <CardHeader>
+          <CardTitle>Your profile</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <FormSkeleton fields={4} />
+        </CardContent>
+      </Card>
+    );
   }
 
   return (

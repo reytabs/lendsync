@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
+import { FormSkeleton } from '@/components/skeletons';
 import { broadcastCurrency } from '@/lib/currency';
 import { cn } from '@/lib/utils';
 
@@ -116,7 +117,7 @@ export default function AdminPage() {
           </CardHeader>
           <CardContent className="max-w-lg space-y-4">
             {generalLoading ? (
-              <p className="text-sm text-muted-foreground">Loading settings…</p>
+              <FormSkeleton fields={2} />
             ) : (
               <>
                 {generalError && (

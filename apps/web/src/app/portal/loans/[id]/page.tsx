@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { Money } from '@/components/money';
+import { LoanDetailSkeleton } from '@/components/skeletons';
 import { formatDate } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -73,7 +74,7 @@ export default function PortalLoanDetailPage() {
   }
 
   if (!data && !error) {
-    return <p className="text-sm text-muted-foreground">Loading…</p>;
+    return <LoanDetailSkeleton />;
   }
   if (!data) {
     return <p className="text-sm text-chart-red">{error}</p>;

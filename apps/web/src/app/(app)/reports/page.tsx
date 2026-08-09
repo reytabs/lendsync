@@ -17,6 +17,7 @@ import { KpiCard } from '@/components/kpi-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { api, apiBaseUrl } from '@/lib/api';
+import { ReportsSkeleton } from '@/components/skeletons';
 import { useCurrency } from '@/lib/currency';
 import { money } from '@/lib/utils';
 
@@ -94,11 +95,7 @@ export default function ReportsPage() {
   }
 
   if (loading) {
-    return (
-      <p className="py-10 text-center text-sm text-muted-foreground">
-        Loading reports…
-      </p>
-    );
+    return <ReportsSkeleton />;
   }
 
   if (!kpis || !charts) {

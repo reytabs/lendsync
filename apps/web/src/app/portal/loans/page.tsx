@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { Money } from '@/components/money';
+import { TableSkeleton } from '@/components/skeletons';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
@@ -57,7 +58,7 @@ export default function PortalLoansPage() {
         </CardHeader>
         <CardContent className="overflow-x-auto">
           {loading ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
+            <TableSkeleton rows={5} cols={5} />
           ) : rows.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No loans yet.{' '}
