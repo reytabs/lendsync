@@ -6,6 +6,10 @@ builder = "NIXPACKS"
 buildCommand = "pnpm install && pnpm run build:backend"
 
 [deploy]
+# Runs against the service's DATABASE_URL before the new version goes live.
+# node-pg-migrate is idempotent (tracks applied migrations in `pgmigrations`),
+# so only new migrations run; a failure here blocks the deploy.
+preDeployCommand = "pnpm run db:migrate"
 startCommand = "pnpm run start:backend"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5

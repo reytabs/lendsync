@@ -18,8 +18,8 @@ import { apiBaseUrl } from '@/lib/api';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('admin@lendsync.local');
-  const [password, setPassword] = useState('admin123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -94,11 +94,6 @@ export default function LoginPage() {
           <Button className="w-full" disabled={loading}>
             {loading ? 'Signing in…' : 'Sign in'}
           </Button>
-          <p className="text-center text-xs text-muted-foreground">
-            Staff: admin@lendsync.local / admin123
-            <br />
-            Borrower: maria@example.com / borrower123
-          </p>
           <p className="text-center text-xs text-muted-foreground">
             New here?{' '}
             <Link href="/signup" className="text-primary hover:underline">
