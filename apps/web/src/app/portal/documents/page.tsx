@@ -80,7 +80,7 @@ export default function PortalDocumentsPage() {
             <label className="block space-y-1.5 text-sm">
               <span className="text-muted-foreground">Type</span>
               <select
-                className="flex h-10 rounded-md border border-border bg-black/30 px-3 text-sm"
+                className="field-control min-w-[160px]"
                 value={docType}
                 onChange={(e) => setDocType(e.target.value)}
               >

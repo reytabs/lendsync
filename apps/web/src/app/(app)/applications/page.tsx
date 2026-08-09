@@ -481,7 +481,7 @@ export default function ApplicationsPage() {
               <label className="block space-y-1.5 text-sm">
                 <span className="text-muted-foreground">Borrower</span>
                 <select
-                  className="flex h-10 w-full rounded-md border border-border bg-black/30 px-3 text-sm"
+                  className="field-control w-full"
                   value={borrowerId}
                   onChange={(e) => setBorrowerId(e.target.value)}
                   required
@@ -498,7 +498,7 @@ export default function ApplicationsPage() {
               <label className="block space-y-1.5 text-sm">
                 <span className="text-muted-foreground">Loan product</span>
                 <select
-                  className="flex h-10 w-full rounded-md border border-border bg-black/30 px-3 text-sm"
+                  className="field-control w-full"
                   value={productId}
                   onChange={(e) => {
                     setProductId(e.target.value);

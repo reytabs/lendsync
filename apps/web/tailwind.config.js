@@ -20,6 +20,10 @@ module.exports = {
           foreground: 'hsl(var(--muted-foreground))',
         },
         border: 'hsl(var(--border))',
+        input: {
+          DEFAULT: 'hsl(var(--input))',
+          border: 'hsl(var(--input-border))',
+        },
         sidebar: {
           DEFAULT: 'hsl(var(--sidebar))',
           border: 'hsl(var(--sidebar-border))',

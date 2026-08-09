@@ -122,7 +122,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 LendSync
               </div>
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                Management System
+                LENDING PLATFORM
               </div>
             </div>
           )}
