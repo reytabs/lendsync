@@ -1,6 +1,7 @@
 import localFont from 'next/font/local';
 import type { Metadata } from 'next';
 import { Toaster } from 'sonner';
+import { SpeedInsights } from '@vercel/speed-insights/next';
 import { PostHogProvider } from '@/components/posthog-provider';
 import './globals.css';
 
@@ -47,6 +48,7 @@ export default function RootLayout({
           {children}
           <Toaster richColors position="top-right" />
         </PostHogProvider>
+        <SpeedInsights />
       </body>
     </html>
   );
