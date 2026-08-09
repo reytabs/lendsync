@@ -62,7 +62,7 @@ export default function LoginPage() {
       </div>
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
-          <Logo className="mx-auto mb-4 h-12 w-12 rounded-[8px] object-cover" />
+          <Logo className="mx-auto mb-4 h-16 w-16 rounded-[8px] object-cover" />
           <h1 className="font-display text-3xl font-semibold tracking-tight">
             LendSync
           </h1>

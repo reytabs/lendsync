@@ -114,7 +114,7 @@ export function PortalShell({
         )}
       >
         <div className="flex h-14 items-center gap-2 border-b border-sidebar-border px-4">
-          <Logo className="h-6 w-6 rounded-[4px] object-cover" />
+          <Logo className="h-10 w-10 rounded-[6px] object-cover" />
           {!collapsed && (
             <div>
               <div className="font-display text-sm font-semibold tracking-tight">
