@@ -9,6 +9,9 @@ export type AuthSession = {
   email: string;
   role: string;
   fullName?: string;
+  orgId?: string;
+  orgName?: string;
+  orgRole?: string;
 };
 
 export function getStoredAuth(): AuthSession | null {
@@ -17,19 +20,41 @@ export function getStoredAuth(): AuthSession | null {
   const role = localStorage.getItem('lms_role');
   const email = localStorage.getItem('lms_email') ?? '';
   const fullName = localStorage.getItem('lms_full_name') ?? undefined;
+  const orgId = localStorage.getItem('lms_org_id') ?? undefined;
+  const orgName = localStorage.getItem('lms_org_name') ?? undefined;
+  const orgRole = localStorage.getItem('lms_org_role') ?? undefined;
   if (!token || !role) return null;
-  return { token, role, email, fullName };
+  return { token, role, email, fullName, orgId, orgName, orgRole };
 }
 
 export function setStoredAuth(data: {
   access_token: string;
-  user: { email?: string; role?: string; full_name?: string };
+  user: {
+    email?: string;
+    role?: string;
+    full_name?: string;
+    organization_id?: string;
+    org_role?: string | null;
+  };
+  /** Optional human-readable org name (not present in login/signup payloads). */
+  orgName?: string;
 }) {
   localStorage.setItem('lms_token', data.access_token);
   localStorage.setItem('lms_role', data.user.role ?? 'borrower');
   localStorage.setItem('lms_email', data.user.email ?? '');
   if (data.user.full_name) {
     localStorage.setItem('lms_full_name', data.user.full_name);
+  }
+  if (data.user.organization_id) {
+    localStorage.setItem('lms_org_id', data.user.organization_id);
+  }
+  if (data.user.org_role) {
+    localStorage.setItem('lms_org_role', data.user.org_role);
+  } else {
+    localStorage.removeItem('lms_org_role');
+  }
+  if (data.orgName) {
+    localStorage.setItem('lms_org_name', data.orgName);
   }
 }
 
@@ -38,6 +63,9 @@ export function clearStoredAuth() {
   localStorage.removeItem('lms_role');
   localStorage.removeItem('lms_email');
   localStorage.removeItem('lms_full_name');
+  localStorage.removeItem('lms_org_id');
+  localStorage.removeItem('lms_org_name');
+  localStorage.removeItem('lms_org_role');
 }
 
 let identifiedSessionToken: string | null = null;

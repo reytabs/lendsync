@@ -16,10 +16,13 @@ import {
 } from '@/lib/auth';
 import { apiBaseUrl } from '@/lib/api';
 
-export default function LoginPage() {
+export default function SignupPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('admin@lendsync.local');
-  const [password, setPassword] = useState('admin123');
+  const [organizationName, setOrganizationName] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [currency, setCurrency] = useState<'USD' | 'PHP'>('USD');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -28,29 +31,31 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${apiBaseUrl()}/api/auth/login`, {
+      const res = await fetch(`${apiBaseUrl()}/api/orgs/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({
+          organizationName,
+          fullName,
+          email,
+          password,
+          currency,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(
-          (data as { message?: string }).message || 'Invalid credentials',
+          (data as { message?: string }).message || 'Could not create workspace',
         );
       }
 
       setStoredAuth(data);
       const session = getStoredAuth();
-      if (session) {
-        identifyAuthSession(session);
-      }
-      posthog.capture('user_logged_in', {
-        role: data.user?.role ?? 'borrower',
-      });
-      router.push(homeForRole(data.user?.role ?? 'borrower'));
+      if (session) identifyAuthSession(session);
+      posthog.capture('org_signed_up', { currency });
+      router.push(homeForRole(data.user?.role ?? 'admin'));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed');
+      setError(err instanceof Error ? err.message : 'Signup failed');
     } finally {
       setLoading(false);
     }
@@ -65,15 +70,33 @@ export default function LoginPage() {
         <div className="text-center">
           <Logo className="mx-auto mb-4 h-16 w-16 rounded-[8px] object-cover" />
           <h1 className="font-display text-3xl font-semibold tracking-tight">
-            LendSync
+            Start your workspace
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Lending operations, clearly managed.
+            Create your organization and start a 14-day free trial.
           </p>
         </div>
         <form onSubmit={onSubmit} className="card-surface space-y-4 p-6">
           <label className="block space-y-1.5 text-sm">
-            <span className="text-muted-foreground">Email</span>
+            <span className="text-muted-foreground">Organization name</span>
+            <Input
+              value={organizationName}
+              onChange={(e) => setOrganizationName(e.target.value)}
+              placeholder="Acme Lending Co."
+              required
+            />
+          </label>
+          <label className="block space-y-1.5 text-sm">
+            <span className="text-muted-foreground">Your name</span>
+            <Input
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="Jane Dela Cruz"
+              required
+            />
+          </label>
+          <label className="block space-y-1.5 text-sm">
+            <span className="text-muted-foreground">Work email</span>
             <Input
               type="email"
               value={email}
@@ -87,22 +110,29 @@ export default function LoginPage() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              placeholder="At least 8 characters"
               required
             />
           </label>
+          <label className="block space-y-1.5 text-sm">
+            <span className="text-muted-foreground">Currency</span>
+            <select
+              className="field-control w-full"
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value as 'USD' | 'PHP')}
+            >
+              <option value="USD">USD — US Dollar</option>
+              <option value="PHP">PHP — Philippine Peso</option>
+            </select>
+          </label>
           {error && <p className="text-sm text-chart-red">{error}</p>}
           <Button className="w-full" disabled={loading}>
-            {loading ? 'Signing in…' : 'Sign in'}
+            {loading ? 'Creating workspace…' : 'Create workspace'}
           </Button>
           <p className="text-center text-xs text-muted-foreground">
-            Staff: admin@lendsync.local / admin123
-            <br />
-            Borrower: maria@example.com / borrower123
-          </p>
-          <p className="text-center text-xs text-muted-foreground">
-            New here?{' '}
-            <Link href="/signup" className="text-primary hover:underline">
-              Create a workspace
+            Already have an account?{' '}
+            <Link href="/login" className="text-primary hover:underline">
+              Sign in
             </Link>
           </p>
         </form>

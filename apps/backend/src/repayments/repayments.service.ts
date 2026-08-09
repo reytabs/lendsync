@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { DatabaseService } from '../database/database.service';
+import { TenantContext } from '../database/tenant-context';
 import type { AuthUser } from '../auth/auth.guards';
 import { NotificationsService } from '../notifications/notifications.service';
 
@@ -17,6 +18,7 @@ export class RepaymentsService {
   constructor(
     private readonly db: DatabaseService,
     private readonly notifications: NotificationsService,
+    private readonly tenant: TenantContext,
   ) {}
 
   async listDue(user: AuthUser) {
@@ -229,7 +231,10 @@ export class RepaymentsService {
 
   @Cron(CronExpression.EVERY_DAY_AT_1AM)
   async markOverdue() {
-    const newlyOverdue = await this.db.many<{
+    // Cross-tenant job: run the sweep unscoped (owner role), then emit each
+    // org's notifications inside that org's tenant scope so RLS/org defaults
+    // apply correctly.
+    const newlyOverdue = await this.db.manyUnscoped<{
       id: string;
       loan_id: string;
       installment_no: number;
@@ -237,6 +242,7 @@ export class RepaymentsService {
       borrower_id: string;
       application_id: string;
       full_name: string;
+      organization_id: string;
     }>(
       `update repayment_schedules s
        set status = 'overdue'
@@ -246,26 +252,29 @@ export class RepaymentsService {
          and s.status = 'upcoming'
          and s.due_date < current_date
        returning s.id, s.loan_id, s.installment_no, s.total_cents,
-                 l.borrower_id, l.application_id, b.full_name`,
+                 l.borrower_id, l.application_id, b.full_name,
+                 l.organization_id`,
     );
 
     for (const row of newlyOverdue) {
       const amount = moneyLabel(Number(row.total_cents));
-      await this.notifications.notifyUserOnceToday(row.borrower_id, {
-        kind: 'emi_overdue',
-        title: 'EMI overdue',
-        body: `Installment #${row.installment_no} (${amount}) is overdue.`,
-        href: `/portal/loans/${row.application_id}`,
-        entityType: 'repayment_schedule',
-        entityId: row.id,
-      });
-      await this.notifications.notifyStaff({
-        kind: 'emi_overdue',
-        title: 'Overdue installment',
-        body: `${row.full_name}: EMI #${row.installment_no} (${amount}) overdue.`,
-        href: '/repayments',
-        entityType: 'repayment_schedule',
-        entityId: row.id,
+      await this.tenant.run(row.organization_id, async () => {
+        await this.notifications.notifyUserOnceToday(row.borrower_id, {
+          kind: 'emi_overdue',
+          title: 'EMI overdue',
+          body: `Installment #${row.installment_no} (${amount}) is overdue.`,
+          href: `/portal/loans/${row.application_id}`,
+          entityType: 'repayment_schedule',
+          entityId: row.id,
+        });
+        await this.notifications.notifyStaff({
+          kind: 'emi_overdue',
+          title: 'Overdue installment',
+          body: `${row.full_name}: EMI #${row.installment_no} (${amount}) overdue.`,
+          href: '/repayments',
+          entityType: 'repayment_schedule',
+          entityId: row.id,
+        });
       });
     }
   }

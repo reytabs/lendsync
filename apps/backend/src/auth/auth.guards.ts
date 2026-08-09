@@ -15,17 +15,32 @@ import { DatabaseService } from '../database/database.service';
 export const ROLES_KEY = 'roles';
 export const Roles = (...roles: UserRole[]) => SetMetadata(ROLES_KEY, roles);
 
+// Well-known org created by migration 0004 to hold pre-SaaS data.
+export const DEFAULT_ORG_ID = '00000000-0000-4000-8000-0000000000aa';
+
+export type OrgRole = 'owner' | 'admin' | 'officer';
+
 export type AuthUser = {
   id: string;
   email: string;
   role: UserRole;
   fullName?: string;
+  orgId: string;
+  orgRole?: OrgRole;
 };
 
 export const CurrentUser = createParamDecorator(
   (_data: unknown, ctx: ExecutionContext): AuthUser => {
     const req = ctx.switchToHttp().getRequest();
     return req.user;
+  },
+);
+
+/** Resolves the active organization id for the request. */
+export const Org = createParamDecorator(
+  (_data: unknown, ctx: ExecutionContext): string => {
+    const req = ctx.switchToHttp().getRequest();
+    return (req.user as AuthUser | undefined)?.orgId ?? DEFAULT_ORG_ID;
   },
 );
 
@@ -60,6 +75,8 @@ export class AuthGuard implements CanActivate {
         email: 'admin@lendsync.local',
         role: 'admin',
         fullName: 'Admin User',
+        orgId: DEFAULT_ORG_ID,
+        orgRole: 'owner',
       } satisfies AuthUser;
       return true;
     }
@@ -71,12 +88,16 @@ export class AuthGuard implements CanActivate {
         email: string;
         role: UserRole;
         fullName?: string;
+        org_id?: string;
+        org_role?: OrgRole;
       };
       req.user = {
         id: payload.sub,
         email: payload.email,
         role: payload.role,
         fullName: payload.fullName,
+        orgId: payload.org_id ?? DEFAULT_ORG_ID,
+        orgRole: payload.org_role,
       } satisfies AuthUser;
       return true;
     } catch {
@@ -86,15 +107,19 @@ export class AuthGuard implements CanActivate {
         email: string;
         role: UserRole;
         full_name: string;
-      }>('select id, email, role, full_name from profiles where id = $1', [
-        token,
-      ]);
+        organization_id: string | null;
+      }>(
+        `select id, email, role, full_name, organization_id
+         from profiles where id = $1`,
+        [token],
+      );
       if (!profile) throw new UnauthorizedException('Invalid token');
       req.user = {
         id: profile.id,
         email: profile.email,
         role: profile.role,
         fullName: profile.full_name,
+        orgId: profile.organization_id ?? DEFAULT_ORG_ID,
       };
       return true;
     }
