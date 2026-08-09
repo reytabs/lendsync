@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import posthog from 'posthog-js';
 import { Plus, Trash2, X } from 'lucide-react';
 import { creditScoreColor } from '@lms/utils';
 import { Card, CardContent } from '@/components/ui/card';
@@ -125,6 +126,11 @@ export default function BorrowersPage() {
         },
       );
 
+      posthog.capture('borrower_created', {
+        has_phone: Boolean(phone.trim()),
+        has_occupation: Boolean(occupation.trim()),
+        has_custom_password: Boolean(password.trim()),
+      });
       if (created.tempPassword) {
         setCreatedTempPassword(created.tempPassword);
       } else {
@@ -145,6 +151,7 @@ export default function BorrowersPage() {
     setError('');
     try {
       await api(`/borrowers/${confirmDelete.id}`, { method: 'DELETE' });
+      posthog.capture('borrower_deleted');
       setConfirmDelete(null);
       await load();
     } catch (err) {

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import posthog from 'posthog-js';
 import { Banknote, X } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -115,6 +116,11 @@ export default function RepaymentsPage() {
         method: 'POST',
         body: JSON.stringify({ loanId: loan.id }),
       });
+      posthog.capture('loan_disbursed', {
+        loan_type: loan.loan_type,
+        principal_cents: Number(loan.principal_cents),
+        tenure_months: loan.tenure_months,
+      });
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Disbursement failed');
@@ -142,6 +148,11 @@ export default function RepaymentsPage() {
           scheduleId: payLoan.next_installment.id,
           amountCents,
         }),
+      });
+      posthog.capture('repayment_recorded', {
+        loan_type: payLoan.loan_type,
+        installment_number: payLoan.next_installment.installment_no,
+        amount_cents: amountCents,
       });
       closePay();
       await load();

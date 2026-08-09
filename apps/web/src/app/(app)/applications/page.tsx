@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import posthog from 'posthog-js';
 import { Plus, X } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -210,6 +211,15 @@ export default function ApplicationsPage() {
           notes: decisionNotes.trim() || undefined,
         }),
       });
+      posthog.capture(
+        decision === 'approved'
+          ? 'loan_application_approved'
+          : 'loan_application_rejected',
+        {
+          loan_type: decisionRow.loan_type,
+          principal_cents: Number(decisionRow.principal_cents),
+        },
+      );
       closeDecision();
       if (decision === 'approved') setFilter('approved');
       if (decision === 'rejected') setFilter('rejected');
@@ -279,6 +289,12 @@ export default function ApplicationsPage() {
         await api(`/loans/${created.id}/submit`, { method: 'POST' });
       }
 
+      posthog.capture('loan_application_created', {
+        loan_type: selectedProduct?.loan_type,
+        tenure_months: tenure,
+        principal_cents: principalCents,
+        submitted_for_review: submitAfterCreate,
+      });
       setOpen(false);
       setPurpose('');
       setPage(1);
