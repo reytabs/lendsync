@@ -2,6 +2,7 @@ import localFont from 'next/font/local';
 import type { Metadata } from 'next';
 import { Toaster } from 'sonner';
 import { SpeedInsights } from '@vercel/speed-insights/next';
+import { Analytics } from '@vercel/analytics/next';
 import { PostHogProvider } from '@/components/posthog-provider';
 import './globals.css';
 
@@ -49,6 +50,7 @@ export default function RootLayout({
           <Toaster richColors position="top-right" />
         </PostHogProvider>
         <SpeedInsights />
+        <Analytics />
       </body>
     </html>
   );
