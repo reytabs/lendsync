@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import posthog from 'posthog-js';
 import { api } from '@/lib/api';
 import { Money } from '@/components/money';
 import { useCurrency } from '@/lib/currency';
@@ -111,6 +112,17 @@ export default function PortalApplyPage() {
       });
       if (submit) {
         await api(`/loans/${created.id}/submit`, { method: 'POST' });
+        posthog.capture('loan_application_submitted', {
+          loan_type: product.loan_type,
+          tenure_months: Number(tenure),
+          principal_cents: Math.round(Number(amount) * 100),
+        });
+      } else {
+        posthog.capture('loan_application_saved', {
+          loan_type: product.loan_type,
+          tenure_months: Number(tenure),
+          principal_cents: Math.round(Number(amount) * 100),
+        });
       }
       router.push(`/portal/loans/${created.id}`);
     } catch (err) {

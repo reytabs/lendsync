@@ -1,6 +1,7 @@
 import localFont from 'next/font/local';
 import type { Metadata } from 'next';
 import { Toaster } from 'sonner';
+import { PostHogProvider } from '@/components/posthog-provider';
 import './globals.css';
 
 const outfit = localFont({
@@ -42,8 +43,10 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body className={`${outfit.variable} ${dmMono.variable} font-sans`}>
-        {children}
-        <Toaster richColors position="top-right" />
+        <PostHogProvider>
+          {children}
+          <Toaster richColors position="top-right" />
+        </PostHogProvider>
       </body>
     </html>
   );

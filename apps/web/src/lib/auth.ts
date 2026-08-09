@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import posthog from 'posthog-js';
 
 export type AuthSession = {
   token: string;
@@ -39,6 +40,30 @@ export function clearStoredAuth() {
   localStorage.removeItem('lms_full_name');
 }
 
+let identifiedSessionToken: string | null = null;
+
+/**
+ * The login response does not expose a user primary key, so email is the only
+ * available stable identifier for this client session.
+ */
+export function identifyAuthSession(session: AuthSession) {
+  if (!session.email || identifiedSessionToken === session.token) return;
+  if (identifiedSessionToken) posthog.reset();
+
+  posthog.identify(session.email, {
+    email: session.email,
+    name: session.fullName,
+    role: session.role,
+  });
+  identifiedSessionToken = session.token;
+}
+
+export function logoutAuthSession() {
+  posthog.reset();
+  identifiedSessionToken = null;
+  clearStoredAuth();
+}
+
 export function homeForRole(role: string) {
   return role === 'borrower' ? '/portal' : '/dashboard';
 }
@@ -59,6 +84,8 @@ export function useAuthGate(opts: {
       router.replace('/login');
       return;
     }
+    identifyAuthSession(auth);
+
     const allowed = allowKey.split(',');
     if (!allowed.includes(auth.role)) {
       router.replace(auth.role === 'borrower' ? '/portal' : opts.redirectIfWrong);

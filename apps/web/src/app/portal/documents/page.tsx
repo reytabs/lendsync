@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import posthog from 'posthog-js';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -55,6 +56,9 @@ export default function PortalDocumentsPage() {
           docType,
           storagePath: `uploads/${Date.now()}_${fileName.trim()}`,
         }),
+      });
+      posthog.capture('document_registered', {
+        document_type: docType,
       });
       setFileName('');
       await load();

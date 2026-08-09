@@ -15,6 +15,7 @@ import {
   Banknote,
 } from 'lucide-react';
 import { useState } from 'react';
+import { logoutAuthSession } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -213,10 +214,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               variant="secondary"
               size="sm"
               onClick={() => {
-                localStorage.removeItem('lms_token');
-                localStorage.removeItem('lms_role');
-                localStorage.removeItem('lms_email');
-                localStorage.removeItem('lms_full_name');
+                logoutAuthSession();
                 router.push('/login');
               }}
             >

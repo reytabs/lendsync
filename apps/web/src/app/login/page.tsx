@@ -2,11 +2,17 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import posthog from 'posthog-js';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Logo } from '@/components/logo';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { homeForRole, setStoredAuth } from '@/lib/auth';
+import {
+  getStoredAuth,
+  homeForRole,
+  identifyAuthSession,
+  setStoredAuth,
+} from '@/lib/auth';
 import { apiBaseUrl } from '@/lib/api';
 
 export default function LoginPage() {
@@ -34,6 +40,13 @@ export default function LoginPage() {
       }
 
       setStoredAuth(data);
+      const session = getStoredAuth();
+      if (session) {
+        identifyAuthSession(session);
+      }
+      posthog.capture('user_logged_in', {
+        role: data.user?.role ?? 'borrower',
+      });
       router.push(homeForRole(data.user?.role ?? 'borrower'));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');

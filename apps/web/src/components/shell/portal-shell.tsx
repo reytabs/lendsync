@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/logo';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { clearStoredAuth, type AuthSession } from '@/lib/auth';
+import { logoutAuthSession, type AuthSession } from '@/lib/auth';
 import { NotificationsBell } from '@/components/notifications/notifications-bell';
 
 const nav = [
@@ -196,7 +196,7 @@ export function PortalShell({
               variant="secondary"
               size="sm"
               onClick={() => {
-                clearStoredAuth();
+                logoutAuthSession();
                 router.push('/login');
               }}
             >

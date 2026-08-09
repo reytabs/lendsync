@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import posthog from 'posthog-js';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -50,6 +51,13 @@ export default function PortalProfilePage() {
         }),
       });
       setProfile(updated);
+      posthog.capture('profile_updated', {
+        updated_fields: [
+          'full_name',
+          ...(phone ? ['phone'] : []),
+          ...(occupation ? ['occupation'] : []),
+        ],
+      });
       localStorage.setItem('lms_full_name', updated.full_name);
       setMessage('Profile updated');
     } catch (err) {
