@@ -10,7 +10,7 @@ import {
 import { api } from './api';
 import { setCurrency as setGlobalCurrency } from './utils';
 
-const CACHE_KEY = 'lms_currency';
+export const CACHE_KEY = 'lms_currency';
 export const CURRENCY_CHANGED_EVENT = 'lms-currency-changed';
 
 const CurrencyContext = createContext<string>('USD');

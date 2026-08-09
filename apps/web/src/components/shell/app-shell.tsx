@@ -14,14 +14,29 @@ import {
   PanelLeft,
   Banknote,
 } from 'lucide-react';
-import { useState } from 'react';
-import { logoutAuthSession } from '@/lib/auth';
+import { useEffect, useState } from 'react';
+import { getStoredAuth, logoutAuthSession } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/logo';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { NotificationsBell } from '@/components/notifications/notifications-bell';
+import { OrgSwitcher } from '@/components/shell/org-switcher';
+
+function initialsOf(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return 'U';
+  return (parts[0][0] + (parts[1]?.[0] ?? '')).toUpperCase();
+}
+
+const roleLabels: Record<string, string> = {
+  owner: 'Owner',
+  admin: 'Administrator',
+  officer: 'Loan Officer',
+  loan_officer: 'Loan Officer',
+  borrower: 'Borrower',
+};
 
 const mainNav = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -71,10 +86,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
+  const [user, setUser] = useState<{ name: string; role: string }>({
+    name: 'Loading…',
+    role: '',
+  });
   const meta = titles[pathname] ?? {
     title: 'LendSync',
     subtitle: 'Lending Management System',
   };
+
+  useEffect(() => {
+    const session = getStoredAuth();
+    if (session) {
+      setUser({
+        name: session.fullName || session.email || 'User',
+        role: session.orgRole || session.role || '',
+      });
+    }
+  }, []);
 
   function NavItem({
     href,
@@ -128,6 +157,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           )}
         </div>
 
+        <div className="border-b border-sidebar-border p-3">
+          <OrgSwitcher collapsed={collapsed} />
+        </div>
+
         <nav className="flex-1 space-y-6 overflow-y-auto p-3">
           <div>
             {!collapsed && (
@@ -163,13 +196,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             )}
           >
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-xs font-semibold text-primary">
-              AU
+              {initialsOf(user.name)}
             </div>
             {!collapsed && (
               <div className="min-w-0">
-                <div className="truncate text-xs font-semibold">Admin User</div>
+                <div className="truncate text-xs font-semibold">
+                  {user.name}
+                </div>
                 <div className="truncate text-[10px] text-muted-foreground">
-                  Super Admin
+                  {roleLabels[user.role] ?? user.role}
                 </div>
               </div>
             )}

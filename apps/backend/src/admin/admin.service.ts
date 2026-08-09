@@ -34,7 +34,8 @@ export class AdminService {
     const data = await this.db.one(
       `insert into system_settings (key, value, updated_at)
        values ($1, $2::jsonb, now())
-       on conflict (key) do update set value = excluded.value, updated_at = now()
+       on conflict (organization_id, key)
+         do update set value = excluded.value, updated_at = now()
        returning *`,
       [key, JSON.stringify(value)],
     );
@@ -59,18 +60,41 @@ export class AdminService {
   ) {
     const tempPassword = `Tmp!${Math.random().toString(36).slice(2, 10)}A1`;
     const passwordHash = await bcrypt.hash(tempPassword, 10);
-    const profile = await this.db.one(
+    const profile = await this.db.one<{
+      id: string;
+      email: string;
+      role: string;
+    }>(
       `insert into profiles (email, full_name, role, password_hash)
        values ($1, $2, $3::public.user_role, $4)
-       on conflict (email) do update set
+       on conflict (organization_id, lower(email)) do update set
          full_name = excluded.full_name,
          role = excluded.role,
          password_hash = excluded.password_hash,
          updated_at = now()
-       returning id, email, role`,
+       returning id, email, role, organization_id`,
       [dto.email.toLowerCase(), dto.fullName, dto.role, passwordHash],
     );
     if (!profile) throw new BadRequestException('Invite failed');
+
+    // Staff need a membership so they carry an org role and appear in the org.
+    const orgRole =
+      dto.role === 'admin'
+        ? 'admin'
+        : dto.role === 'loan_officer'
+          ? 'officer'
+          : null;
+    if (orgRole) {
+      await this.db.query(
+        `insert into memberships (organization_id, profile_id, role)
+         select organization_id, id, $2::public.org_role
+         from profiles where id = $1
+         on conflict (organization_id, profile_id)
+           do update set role = excluded.role`,
+        [profile.id, orgRole],
+      );
+    }
+
     await this.db.query(
       `insert into audit_logs (actor_id, action, entity_type, entity_id, meta)
        values ($1, 'user_invite', 'profile', $2, $3::jsonb)`,

@@ -6,9 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
-import { FormSkeleton } from '@/components/skeletons';
+import { FormSkeleton, TableSkeleton } from '@/components/skeletons';
 import { broadcastCurrency } from '@/lib/currency';
-import { cn } from '@/lib/utils';
+import { cn, formatDate } from '@/lib/utils';
 
 const tabs = ['General', 'Users & Roles', 'Integrations', 'Security'] as const;
 
@@ -29,8 +29,6 @@ export default function AdminPage() {
   const [generalLoading, setGeneralLoading] = useState(true);
   const [generalSaving, setGeneralSaving] = useState(false);
   const [generalError, setGeneralError] = useState('');
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteName, setInviteName] = useState('');
   const [require2fa, setRequire2fa] = useState(false);
   const [enforceTls, setEnforceTls] = useState(true);
   const [autoBackups, setAutoBackups] = useState(true);
@@ -153,61 +151,7 @@ export default function AdminPage() {
         </Card>
       )}
 
-      {tab === 'Users & Roles' && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Users & Roles</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="grid gap-3 md:grid-cols-3">
-              <Input
-                placeholder="Full name"
-                value={inviteName}
-                onChange={(e) => setInviteName(e.target.value)}
-              />
-              <Input
-                placeholder="Email"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-              />
-              <Button
-                onClick={() => {
-                  toast.success(`Invite queued for ${inviteEmail || 'user'}`);
-                  setInviteEmail('');
-                  setInviteName('');
-                }}
-              >
-                Invite user
-              </Button>
-            </div>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-[11px] uppercase text-muted-foreground">
-                  <th className="pb-2">Name</th>
-                  <th className="pb-2">Email</th>
-                  <th className="pb-2">Role</th>
-                  <th className="pb-2">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[
-                  ['Admin User', 'admin@lendsync.local', 'admin', 'Active'],
-                  ['James Reyes', 'james@lendsync.local', 'loan_officer', 'Active'],
-                  ['Elena Cruz', 'elena@lendsync.local', 'loan_officer', 'Active'],
-                ].map((row) => (
-                  <tr key={row[1]} className="border-b border-border/50">
-                    {row.map((cell) => (
-                      <td key={cell} className="py-2">
-                        {cell}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
-      )}
+      {tab === 'Users & Roles' && <UsersRolesTab />}
 
       {tab === 'Integrations' && (
         <div className="grid gap-4 md:grid-cols-2">
@@ -261,6 +205,183 @@ export default function AdminPage() {
         </Card>
       )}
     </div>
+  );
+}
+
+type StaffUser = {
+  id: string;
+  email: string;
+  full_name: string;
+  role: 'admin' | 'loan_officer' | 'borrower';
+  kyc_status?: string;
+  created_at: string;
+};
+
+const roleOptions = [
+  { value: 'loan_officer', label: 'Loan Officer' },
+  { value: 'admin', label: 'Administrator' },
+] as const;
+
+const roleLabel: Record<string, string> = {
+  admin: 'Administrator',
+  loan_officer: 'Loan Officer',
+  borrower: 'Borrower',
+};
+
+function UsersRolesTab() {
+  const [users, setUsers] = useState<StaffUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState<'admin' | 'loan_officer'>('loan_officer');
+  const [inviting, setInviting] = useState(false);
+  const [tempCredential, setTempCredential] = useState<{
+    email: string;
+    tempPassword: string;
+  } | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      setUsers(await api<StaffUser[]>('/admin/users'));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load users');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function invite() {
+    if (!name.trim() || !email.trim()) {
+      toast.error('Name and email are required');
+      return;
+    }
+    setInviting(true);
+    setTempCredential(null);
+    try {
+      const res = await api<{ email: string; tempPassword: string }>(
+        '/admin/users/invite',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            email: email.trim(),
+            fullName: name.trim(),
+            role,
+          }),
+        },
+      );
+      setTempCredential({ email: res.email, tempPassword: res.tempPassword });
+      toast.success(`Invited ${res.email}`);
+      setName('');
+      setEmail('');
+      setRole('loan_officer');
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Invite failed');
+    } finally {
+      setInviting(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Team members</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="grid gap-3 md:grid-cols-4">
+          <Input
+            placeholder="Full name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <Input
+            placeholder="Email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          <select
+            className="field-control w-full"
+            value={role}
+            onChange={(e) =>
+              setRole(e.target.value as 'admin' | 'loan_officer')
+            }
+          >
+            {roleOptions.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          <Button onClick={() => void invite()} disabled={inviting}>
+            {inviting ? 'Inviting…' : 'Invite user'}
+          </Button>
+        </div>
+
+        {tempCredential && (
+          <div className="rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-sm">
+            <span className="font-semibold">{tempCredential.email}</span> can
+            sign in with temporary password{' '}
+            <code className="rounded bg-black/20 px-1.5 py-0.5 font-mono">
+              {tempCredential.tempPassword}
+            </code>
+            . Share it securely — it won&apos;t be shown again.
+          </div>
+        )}
+
+        {error && (
+          <p className="rounded-md border border-chart-red/40 bg-chart-red/10 px-3 py-2 text-sm text-chart-red">
+            {error}
+          </p>
+        )}
+
+        {loading ? (
+          <TableSkeleton rows={4} cols={4} />
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-[11px] uppercase text-muted-foreground">
+                <th className="pb-2">Name</th>
+                <th className="pb-2">Email</th>
+                <th className="pb-2">Role</th>
+                <th className="pb-2">Joined</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users
+                .filter((u) => u.role !== 'borrower')
+                .map((u) => (
+                  <tr key={u.id} className="border-b border-border/50">
+                    <td className="py-2">{u.full_name}</td>
+                    <td className="py-2">{u.email}</td>
+                    <td className="py-2">{roleLabel[u.role] ?? u.role}</td>
+                    <td className="py-2 text-muted-foreground">
+                      {formatDate(u.created_at)}
+                    </td>
+                  </tr>
+                ))}
+              {users.filter((u) => u.role !== 'borrower').length === 0 && (
+                <tr>
+                  <td
+                    colSpan={4}
+                    className="py-6 text-center text-muted-foreground"
+                  >
+                    No team members yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
