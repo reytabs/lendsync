@@ -18,6 +18,8 @@ export type SendEmailResult = {
   error?: string;
 };
 
+type BrevoSender = { name: string; email: string };
+
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
@@ -33,12 +35,31 @@ export class EmailService {
     );
   }
 
+  private parseSender(): BrevoSender | null {
+    const fromEmail = this.env('BREVO_FROM_EMAIL');
+    const fromName = this.env('BREVO_FROM_NAME') || 'LendSync';
+    if (fromEmail) {
+      return { name: fromName, email: fromEmail };
+    }
+
+    // Allow "LendSync <noreply@example.com>" in BREVO_FROM
+    const from = this.env('BREVO_FROM');
+    if (!from) return null;
+    const match = from.match(/^(.*?)\s*<([^>]+)>$/);
+    if (match) {
+      return {
+        name: match[1].trim() || 'LendSync',
+        email: match[2].trim(),
+      };
+    }
+    if (from.includes('@')) {
+      return { name: 'LendSync', email: from };
+    }
+    return null;
+  }
+
   isConfigured() {
-    return Boolean(
-      this.env('MAILGUN_API_KEY') &&
-        this.env('MAILGUN_DOMAIN') &&
-        this.env('MAILGUN_FROM'),
-    );
+    return Boolean(this.env('BREVO_API_KEY') && this.parseSender());
   }
 
   webAppUrl() {
@@ -46,81 +67,62 @@ export class EmailService {
   }
 
   async send(input: SendEmailInput): Promise<SendEmailResult> {
-    const apiKey = this.env('MAILGUN_API_KEY');
-    const domain = this.env('MAILGUN_DOMAIN');
-    const from = this.env('MAILGUN_FROM');
-    const apiBase = (
-      this.env('MAILGUN_API_BASE') || 'https://api.mailgun.net'
-    ).replace(/\/$/, '');
+    const apiKey = this.env('BREVO_API_KEY');
+    const sender = this.parseSender();
 
-    if (!apiKey || !domain || !from) {
+    if (!apiKey || !sender) {
       const missing = [
-        !apiKey && 'MAILGUN_API_KEY',
-        !domain && 'MAILGUN_DOMAIN',
-        !from && 'MAILGUN_FROM',
+        !apiKey && 'BREVO_API_KEY',
+        !sender && 'BREVO_FROM_EMAIL (or BREVO_FROM)',
       ].filter(Boolean);
-      const error = `Mailgun not configured (missing ${missing.join(', ')})`;
+      const error = `Brevo not configured (missing ${missing.join(', ')})`;
       this.logger.warn(`${error}: to=${input.to} subject="${input.subject}"`);
       return { ok: false, skipped: true, error };
     }
 
-    // From address must be on the Mailgun sending domain (sandbox or custom).
-    const fromMatch = from.match(/<([^>]+)>/)?.[1] ?? from;
-    const fromHost = fromMatch.split('@')[1]?.toLowerCase();
-    if (!fromHost || fromHost !== domain.toLowerCase()) {
-      const error = `MAILGUN_FROM must use @${domain} (got ${fromHost ?? 'invalid'}). Example: LendSync <postmaster@${domain}>`;
-      this.logger.error(error);
-      return { ok: false, error };
-    }
-
-    const body = new URLSearchParams();
-    body.set('from', from);
-    body.set('to', input.to);
-    body.set('subject', input.subject);
-    body.set('text', input.text);
-    body.set('html', input.html);
-
-    const auth = Buffer.from(`api:${apiKey}`).toString('base64');
-    const url = `${apiBase}/v3/${encodeURIComponent(domain)}/messages`;
+    const payload = {
+      sender,
+      to: [{ email: input.to }],
+      subject: input.subject,
+      htmlContent: input.html,
+      textContent: input.text,
+    };
 
     try {
-      const res = await fetch(url, {
+      const res = await fetch('https://api.brevo.com/v3/smtp/email', {
         method: 'POST',
         headers: {
-          Authorization: `Basic ${auth}`,
-          'Content-Type': 'application/x-www-form-urlencoded',
+          accept: 'application/json',
+          'content-type': 'application/json',
+          'api-key': apiKey,
         },
-        body,
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
         const detail = await res.text().catch(() => '');
-        let message = `Mailgun rejected the email (${res.status})`;
+        let message = `Brevo rejected the email (${res.status})`;
         try {
-          const parsed = JSON.parse(detail) as { message?: string };
+          const parsed = JSON.parse(detail) as {
+            message?: string;
+            code?: string;
+          };
           if (parsed.message) message = parsed.message;
         } catch {
           if (detail) message = `${message}: ${detail.slice(0, 200)}`;
         }
-        // Sandbox domains only deliver to authorized recipients.
-        if (
-          domain.includes('sandbox') &&
-          /not authorized|forbidden|recipient/i.test(message)
-        ) {
-          message = `${message} — authorize this recipient in Mailgun sandbox (Sending → Authorized Recipients).`;
-        }
         this.logger.error(
-          `Mailgun send failed (${res.status}) to=${input.to}: ${detail.slice(0, 300)}`,
+          `Brevo send failed (${res.status}) to=${input.to}: ${detail.slice(0, 300)}`,
         );
         return { ok: false, error: message };
       }
 
-      this.logger.log(`Email sent to=${input.to} subject="${input.subject}"`);
+      this.logger.log(`Email sent via Brevo to=${input.to} subject="${input.subject}"`);
       return { ok: true };
     } catch (err) {
       const error =
-        err instanceof Error ? err.message : 'Mailgun network error';
-      this.logger.error(`Mailgun send error to=${input.to}: ${error}`);
+        err instanceof Error ? err.message : 'Brevo network error';
+      this.logger.error(`Brevo send error to=${input.to}: ${error}`);
       return { ok: false, error };
     }
   }

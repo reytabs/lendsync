@@ -167,9 +167,9 @@ export default function AdminPage() {
         <div className="grid gap-4 md:grid-cols-2">
           {[
             {
-              name: 'Mailgun',
+              name: 'Brevo',
               status: 'Platform env',
-              desc: 'Staff invite emails (MAILGUN_* on the API)',
+              desc: 'Staff invite emails (BREVO_* on the API)',
             },
             {
               name: 'Stripe',
