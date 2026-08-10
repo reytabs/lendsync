@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import type { InterestMethod } from '@lms/types';
 import { calculateEmi } from '@lms/utils';
 import {
   Bar,
@@ -14,11 +15,28 @@ import {
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Money } from '@/components/money';
+import { cn } from '@/lib/utils';
+
+const interestMethods: { value: InterestMethod; label: string; hint: string }[] =
+  [
+    {
+      value: 'reducing',
+      label: 'Reducing balance',
+      hint: 'Interest on remaining principal (typical bank EMI)',
+    },
+    {
+      value: 'flat',
+      label: 'Flat rate',
+      hint: 'Interest on original principal for the full term',
+    },
+  ];
 
 export default function EmiCalculatorPage() {
   const [principal, setPrincipal] = useState(100000);
   const [rate, setRate] = useState(12);
   const [tenure, setTenure] = useState(36);
+  const [interestMethod, setInterestMethod] =
+    useState<InterestMethod>('reducing');
 
   const result = useMemo(
     () =>
@@ -26,9 +44,9 @@ export default function EmiCalculatorPage() {
         principalCents: Math.round(principal * 100),
         annualRatePercent: rate,
         tenureMonths: tenure,
-        interestMethod: 'reducing',
+        interestMethod,
       }),
-    [principal, rate, tenure],
+    [principal, rate, tenure, interestMethod],
   );
 
   const chartData = result.schedule.slice(0, 12).map((row) => ({
@@ -36,6 +54,9 @@ export default function EmiCalculatorPage() {
     principal: row.principalCents / 100,
     interest: row.interestCents / 100,
   }));
+
+  const methodHint =
+    interestMethods.find((m) => m.value === interestMethod)?.hint ?? '';
 
   return (
     <div className="grid gap-4 xl:grid-cols-3">
@@ -71,7 +92,36 @@ export default function EmiCalculatorPage() {
             value={tenure}
             onChange={setTenure}
           />
-          <div className="space-y-3 rounded-md border border-border bg-black/20 p-4">
+
+          <div className="space-y-2">
+            <div className="text-sm">Interest method</div>
+            <div className="grid grid-cols-2 gap-2">
+              {interestMethods.map((m) => (
+                <button
+                  key={m.value}
+                  type="button"
+                  onClick={() => setInterestMethod(m.value)}
+                  className={cn(
+                    'rounded-md border px-3 py-2 text-left text-sm transition-colors',
+                    interestMethod === m.value
+                      ? 'border-primary bg-primary/15 text-primary'
+                      : 'border-border text-muted-foreground hover:bg-muted/50',
+                  )}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">{methodHint}</p>
+            {interestMethod === 'flat' && (
+              <p className="text-xs text-muted-foreground">
+                Same advertised rate is usually more expensive as flat than
+                reducing.
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
             <Metric
               label="Monthly EMI"
               value={<Money cents={result.monthlyEmiCents} />}
@@ -117,7 +167,10 @@ export default function EmiCalculatorPage() {
         <Card>
           <CardHeader>
             <CardTitle>Amortization Schedule</CardTitle>
-            <p className="text-xs text-muted-foreground">First 12 months shown</p>
+            <p className="text-xs text-muted-foreground">
+              First 12 months ·{' '}
+              {interestMethod === 'flat' ? 'Flat rate' : 'Reducing balance'}
+            </p>
           </CardHeader>
           <CardContent className="max-h-80 overflow-auto">
             <table className="w-full text-sm">

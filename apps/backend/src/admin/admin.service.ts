@@ -1,7 +1,25 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { DatabaseService } from '../database/database.service';
 import type { AuthUser } from '../auth/auth.guards';
+
+export type ProductInput = {
+  name: string;
+  description?: string;
+  loanType: string;
+  interestMethod: string;
+  annualRatePercent: number;
+  minAmountCents: number;
+  maxAmountCents: number;
+  minTenureMonths: number;
+  maxTenureMonths: number;
+  graceDays?: number;
+  isActive?: boolean;
+};
 
 @Injectable()
 export class AdminService {
@@ -112,30 +130,45 @@ export class AdminService {
     };
   }
 
-  async listProducts() {
-    return this.db.many('select * from loan_products order by name');
+  private assertProductBounds(dto: Partial<ProductInput>) {
+    if (
+      dto.minAmountCents != null &&
+      dto.maxAmountCents != null &&
+      dto.minAmountCents > dto.maxAmountCents
+    ) {
+      throw new BadRequestException('Min amount cannot exceed max amount');
+    }
+    if (
+      dto.minTenureMonths != null &&
+      dto.maxTenureMonths != null &&
+      dto.minTenureMonths > dto.maxTenureMonths
+    ) {
+      throw new BadRequestException('Min tenure cannot exceed max tenure');
+    }
   }
 
-  async createProduct(dto: {
-    name: string;
-    description?: string;
-    loanType: string;
-    interestMethod: string;
-    annualRatePercent: number;
-    minAmountCents: number;
-    maxAmountCents: number;
-    minTenureMonths: number;
-    maxTenureMonths: number;
-  }) {
+  async listProducts() {
+    return this.db.many(
+      `select * from loan_products
+       order by is_active desc, name asc`,
+    );
+  }
+
+  async createProduct(dto: ProductInput) {
+    this.assertProductBounds(dto);
     const data = await this.db.one(
       `insert into loan_products (
          name, description, loan_type, interest_method, annual_rate_percent,
-         min_amount_cents, max_amount_cents, min_tenure_months, max_tenure_months
-       ) values ($1,$2,$3::public.loan_type,$4::public.interest_method,$5,$6,$7,$8,$9)
+         min_amount_cents, max_amount_cents, min_tenure_months, max_tenure_months,
+         grace_days, is_active
+       ) values (
+         $1,$2,$3::public.loan_type,$4::public.interest_method,$5,
+         $6,$7,$8,$9,$10,$11
+       )
        returning *`,
       [
-        dto.name,
-        dto.description ?? null,
+        dto.name.trim(),
+        dto.description?.trim() || null,
         dto.loanType,
         dto.interestMethod,
         dto.annualRatePercent,
@@ -143,10 +176,113 @@ export class AdminService {
         dto.maxAmountCents,
         dto.minTenureMonths,
         dto.maxTenureMonths,
+        dto.graceDays ?? 0,
+        dto.isActive ?? true,
       ],
     );
     if (!data) throw new BadRequestException('Failed to create product');
     return data;
+  }
+
+  async updateProduct(id: string, dto: Partial<ProductInput>) {
+    const existing = await this.db.one(
+      'select * from loan_products where id = $1',
+      [id],
+    );
+    if (!existing) throw new NotFoundException('Product not found');
+
+    const next = {
+      name: dto.name?.trim() ?? existing.name,
+      description:
+        dto.description !== undefined
+          ? dto.description.trim() || null
+          : existing.description,
+      loanType: dto.loanType ?? existing.loan_type,
+      interestMethod: dto.interestMethod ?? existing.interest_method,
+      annualRatePercent:
+        dto.annualRatePercent ?? Number(existing.annual_rate_percent),
+      minAmountCents:
+        dto.minAmountCents ?? Number(existing.min_amount_cents),
+      maxAmountCents:
+        dto.maxAmountCents ?? Number(existing.max_amount_cents),
+      minTenureMonths:
+        dto.minTenureMonths ?? Number(existing.min_tenure_months),
+      maxTenureMonths:
+        dto.maxTenureMonths ?? Number(existing.max_tenure_months),
+      graceDays: dto.graceDays ?? Number(existing.grace_days),
+      isActive: dto.isActive ?? Boolean(existing.is_active),
+    };
+    this.assertProductBounds(next);
+
+    const data = await this.db.one(
+      `update loan_products set
+         name = $2,
+         description = $3,
+         loan_type = $4::public.loan_type,
+         interest_method = $5::public.interest_method,
+         annual_rate_percent = $6,
+         min_amount_cents = $7,
+         max_amount_cents = $8,
+         min_tenure_months = $9,
+         max_tenure_months = $10,
+         grace_days = $11,
+         is_active = $12,
+         updated_at = now()
+       where id = $1
+       returning *`,
+      [
+        id,
+        next.name,
+        next.description,
+        next.loanType,
+        next.interestMethod,
+        next.annualRatePercent,
+        next.minAmountCents,
+        next.maxAmountCents,
+        next.minTenureMonths,
+        next.maxTenureMonths,
+        next.graceDays,
+        next.isActive,
+      ],
+    );
+    if (!data) throw new NotFoundException('Product not found');
+    return data;
+  }
+
+  async setProductActive(id: string, isActive: boolean) {
+    const data = await this.db.one(
+      `update loan_products
+       set is_active = $2, updated_at = now()
+       where id = $1
+       returning *`,
+      [id, isActive],
+    );
+    if (!data) throw new NotFoundException('Product not found');
+    return data;
+  }
+
+  async deleteProduct(id: string) {
+    const existing = await this.db.one(
+      'select id, name from loan_products where id = $1',
+      [id],
+    );
+    if (!existing) throw new NotFoundException('Product not found');
+
+    const inUse = await this.db.one<{ count: string }>(
+      `select (
+         (select count(*) from loan_applications where product_id = $1) +
+         (select count(*) from loans where product_id = $1)
+       )::text as count`,
+      [id],
+    );
+    if (Number(inUse?.count ?? 0) > 0) {
+      throw new BadRequestException(
+        'Product is in use by applications or loans. Deactivate it instead.',
+      );
+    }
+
+    await this.db.query('delete from loan_products where id = $1', [id]);
+    return { ok: true, id };
   }
 
   async auditLogs() {
