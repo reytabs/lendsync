@@ -100,3 +100,71 @@
     color: hsl(var(--foreground));
   }
 }
+
+/* Staff nickel tour (driver.js) — Sample A spotlight + card */
+.lendsync-tour-popover {
+  background: hsl(var(--card)) !important;
+  color: hsl(var(--foreground)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 12px 40px rgba(18, 20, 26, 0.18) !important;
+  max-width: 320px !important;
+}
+
+.lendsync-tour-popover .driver-popover-title {
+  font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+.lendsync-tour-popover .driver-popover-description {
+  font-size: 13px !important;
+  line-height: 1.5 !important;
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+.lendsync-tour-popover .driver-popover-progress-text {
+  font-size: 12px !important;
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+.lendsync-tour-popover .driver-popover-navigation-btns {
+  gap: 8px;
+}
+
+.lendsync-tour-popover .driver-popover-prev-btn {
+  text-shadow: none !important;
+  background: transparent !important;
+  border: 1px solid hsl(var(--border)) !important;
+  color: hsl(var(--foreground)) !important;
+  border-radius: 6px !important;
+  text-decoration: none !important;
+}
+
+.lendsync-tour-popover .driver-popover-next-btn {
+  text-shadow: none !important;
+  background: hsl(var(--primary)) !important;
+  border: 1px solid hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+  border-radius: 6px !important;
+  text-decoration: none !important;
+  font-weight: 600 !important;
+}
+
+.lendsync-tour-popover .driver-popover-close-btn {
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+.lendsync-tour-popover .driver-popover-arrow-side-left,
+.lendsync-tour-popover .driver-popover-arrow-side-right,
+.lendsync-tour-popover .driver-popover-arrow-side-top,
+.lendsync-tour-popover .driver-popover-arrow-side-bottom {
+  border-color: hsl(var(--card)) !important;
+}
+
+.driver-active .driver-active-element {
+  outline: 2px solid hsl(var(--primary)) !important;
+  outline-offset: 2px;
+  border-radius: 8px;
+}

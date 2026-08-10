@@ -10,21 +10,43 @@ import {
   UserRound,
   PanelLeftClose,
   PanelLeft,
+  Compass,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/logo';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { logoutAuthSession, type AuthSession } from '@/lib/auth';
 import { NotificationsBell } from '@/components/notifications/notifications-bell';
+import { startBorrowerTour } from '@/components/tour/borrower-tour';
 
 const nav = [
-  { href: '/portal', label: 'Home', icon: Home },
-  { href: '/portal/apply', label: 'Apply', icon: FilePlus2 },
-  { href: '/portal/loans', label: 'My loans', icon: Wallet },
-  { href: '/portal/documents', label: 'Documents', icon: FolderOpen },
-  { href: '/portal/profile', label: 'Profile', icon: UserRound },
+  { href: '/portal', label: 'Home', icon: Home, tour: 'nav-portal-home' },
+  {
+    href: '/portal/apply',
+    label: 'Apply',
+    icon: FilePlus2,
+    tour: 'nav-portal-apply',
+  },
+  {
+    href: '/portal/loans',
+    label: 'My loans',
+    icon: Wallet,
+    tour: 'nav-portal-loans',
+  },
+  {
+    href: '/portal/documents',
+    label: 'Documents',
+    icon: FolderOpen,
+    tour: 'nav-portal-documents',
+  },
+  {
+    href: '/portal/profile',
+    label: 'Profile',
+    icon: UserRound,
+    tour: 'nav-portal-profile',
+  },
 ];
 
 const titles: Record<string, { title: string; subtitle: string }> = {
@@ -60,6 +82,7 @@ export function PortalShell({
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
+  const tourStarted = useRef(false);
 
   const meta =
     titles[pathname] ??
@@ -74,20 +97,41 @@ export function PortalShell({
     .slice(0, 2)
     .toUpperCase();
 
+  useEffect(() => {
+    if (!session.email || tourStarted.current) return;
+    tourStarted.current = true;
+    startBorrowerTour({
+      email: session.email,
+      ensureExpanded: () => setCollapsed(false),
+    });
+  }, [session.email]);
+
+  function replayTour() {
+    if (!session.email) return;
+    startBorrowerTour({
+      email: session.email,
+      force: true,
+      ensureExpanded: () => setCollapsed(false),
+    });
+  }
+
   function NavItem({
     href,
     label,
     icon: Icon,
+    tour,
   }: {
     href: string;
     label: string;
     icon: React.ComponentType<{ className?: string }>;
+    tour?: string;
   }) {
     const active =
       href === '/portal' ? pathname === href : pathname.startsWith(href);
     return (
       <Link
         href={href}
+        data-tour={tour}
         className={cn(
           'group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
           active
@@ -113,7 +157,10 @@ export function PortalShell({
           collapsed ? 'w-[72px]' : 'w-60',
         )}
       >
-        <div className="flex h-14 items-center gap-2 border-b border-sidebar-border px-4">
+        <div
+          data-tour="portal-brand"
+          className="flex h-14 items-center gap-2 border-b border-sidebar-border px-4"
+        >
           <Logo className="h-10 w-10 rounded-[6px] object-cover" />
           {!collapsed && (
             <div>
@@ -178,6 +225,16 @@ export function PortalShell({
               </>
             )}
           </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="mt-1 w-full justify-start text-muted-foreground"
+            onClick={replayTour}
+            title="Take a tour"
+          >
+            <Compass className="h-4 w-4" />
+            {!collapsed && <span className="ml-2">Take a tour</span>}
+          </Button>
         </div>
       </aside>
 
@@ -191,7 +248,9 @@ export function PortalShell({
           </div>
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            <NotificationsBell />
+            <div data-tour="portal-notifications">
+              <NotificationsBell />
+            </div>
             <Button
               variant="secondary"
               size="sm"

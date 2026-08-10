@@ -13,8 +13,9 @@ import {
   PanelLeftClose,
   PanelLeft,
   Banknote,
+  Compass,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { getStoredAuth, logoutAuthSession } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
@@ -23,6 +24,7 @@ import { Logo } from '@/components/logo';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { NotificationsBell } from '@/components/notifications/notifications-bell';
 import { OrgSwitcher } from '@/components/shell/org-switcher';
+import { startStaffTour } from '@/components/tour/staff-tour';
 
 function initialsOf(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -38,17 +40,41 @@ const roleLabels: Record<string, string> = {
   borrower: 'Borrower',
 };
 
-const mainNav = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/applications', label: 'Loan Applications', icon: FileText },
-  { href: '/borrowers', label: 'Borrowers', icon: Users },
-  { href: '/repayments', label: 'Repayments', icon: Banknote },
-  { href: '/emi-calculator', label: 'EMI Calculator', icon: Calculator },
-];
+function canAccessAdmin(role: string) {
+  return role === 'admin' || role === 'owner';
+}
 
-const analyticsNav = [
-  { href: '/reports', label: 'Reports & Analytics', icon: BarChart3 },
-  { href: '/admin', label: 'Admin Panel', icon: Settings },
+const mainNav = [
+  {
+    href: '/dashboard',
+    label: 'Dashboard',
+    icon: LayoutDashboard,
+    tour: 'nav-dashboard',
+  },
+  {
+    href: '/applications',
+    label: 'Loan Applications',
+    icon: FileText,
+    tour: 'nav-applications',
+  },
+  {
+    href: '/borrowers',
+    label: 'Borrowers',
+    icon: Users,
+    tour: 'nav-borrowers',
+  },
+  {
+    href: '/repayments',
+    label: 'Repayments',
+    icon: Banknote,
+    tour: 'nav-repayments',
+  },
+  {
+    href: '/emi-calculator',
+    label: 'EMI Calculator',
+    icon: Calculator,
+    tour: 'nav-emi',
+  },
 ];
 
 const titles: Record<string, { title: string; subtitle: string }> = {
@@ -86,14 +112,40 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
-  const [user, setUser] = useState<{ name: string; role: string }>({
+  const [user, setUser] = useState<{
+    name: string;
+    role: string;
+    email: string;
+  }>({
     name: 'Loading…',
     role: '',
+    email: '',
   });
+  const tourStarted = useRef(false);
   const meta = titles[pathname] ?? {
     title: 'LendSync',
     subtitle: 'Lending Management System',
   };
+
+  const analyticsNav = useMemo(() => {
+    const items = [
+      {
+        href: '/reports',
+        label: 'Reports & Analytics',
+        icon: BarChart3,
+        tour: 'nav-reports',
+      },
+    ];
+    if (canAccessAdmin(user.role)) {
+      items.push({
+        href: '/admin',
+        label: 'Admin Panel',
+        icon: Settings,
+        tour: 'nav-admin',
+      });
+    }
+    return items;
+  }, [user.role]);
 
   useEffect(() => {
     const session = getStoredAuth();
@@ -101,23 +153,48 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       setUser({
         name: session.fullName || session.email || 'User',
         role: session.orgRole || session.role || '',
+        email: session.email || '',
       });
     }
   }, []);
+
+  useEffect(() => {
+    if (!user.email || !user.role || tourStarted.current) return;
+    if (user.role === 'borrower') return;
+    tourStarted.current = true;
+    startStaffTour({
+      email: user.email,
+      role: user.role,
+      ensureExpanded: () => setCollapsed(false),
+    });
+  }, [user.email, user.role]);
+
+  function replayTour() {
+    if (!user.email) return;
+    startStaffTour({
+      email: user.email,
+      role: user.role,
+      force: true,
+      ensureExpanded: () => setCollapsed(false),
+    });
+  }
 
   function NavItem({
     href,
     label,
     icon: Icon,
+    tour,
   }: {
     href: string;
     label: string;
     icon: React.ComponentType<{ className?: string }>;
+    tour?: string;
   }) {
     const active = pathname === href;
     return (
       <Link
         href={href}
+        data-tour={tour}
         className={cn(
           'group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
           active
@@ -143,7 +220,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           collapsed ? 'w-[72px]' : 'w-60',
         )}
       >
-        <div className="flex h-14 items-center gap-2 border-b border-sidebar-border px-4">
+        <div
+          data-tour="brand"
+          className="flex h-14 items-center gap-2 border-b border-sidebar-border px-4"
+        >
           <Logo className="h-10 w-10 rounded-[6px] object-cover" />
           {!collapsed && (
             <div>
@@ -157,7 +237,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           )}
         </div>
 
-        <div className="border-b border-sidebar-border p-3">
+        <div data-tour="org-switcher" className="border-b border-sidebar-border p-3">
           <OrgSwitcher collapsed={collapsed} />
         </div>
 
@@ -224,6 +304,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </>
             )}
           </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="mt-1 w-full justify-start text-muted-foreground"
+            onClick={replayTour}
+            title="Take a tour"
+          >
+            <Compass className="h-4 w-4" />
+            {!collapsed && <span className="ml-2">Take a tour</span>}
+          </Button>
         </div>
       </aside>
 
@@ -238,13 +328,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-3">
             <div className="relative hidden md:block">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                className="w-56 pl-9"
-                placeholder="Quick search…"
-              />
+              <Input className="w-56 pl-9" placeholder="Quick search…" />
             </div>
             <ThemeToggle />
-            <NotificationsBell />
+            <div data-tour="notifications">
+              <NotificationsBell />
+            </div>
             <Button
               variant="secondary"
               size="sm"
