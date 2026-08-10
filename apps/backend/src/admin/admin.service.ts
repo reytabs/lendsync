@@ -1,10 +1,12 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { DatabaseService } from '../database/database.service';
+import { EmailService } from '../email/email.service';
 import type { AuthUser } from '../auth/auth.guards';
 
 export type ProductInput = {
@@ -21,9 +23,20 @@ export type ProductInput = {
   isActive?: boolean;
 };
 
+const roleLabel: Record<string, string> = {
+  admin: 'Administrator',
+  loan_officer: 'Loan Officer',
+  borrower: 'Borrower',
+};
+
 @Injectable()
 export class AdminService {
-  constructor(private readonly db: DatabaseService) {}
+  private readonly logger = new Logger(AdminService.name);
+
+  constructor(
+    private readonly db: DatabaseService,
+    private readonly email: EmailService,
+  ) {}
 
   async getSettings() {
     const data = await this.db.many<{ key: string; value: unknown }>(
@@ -82,6 +95,7 @@ export class AdminService {
       id: string;
       email: string;
       role: string;
+      organization_id: string;
     }>(
       `insert into profiles (email, full_name, role, password_hash)
        values ($1, $2, $3::public.user_role, $4)
@@ -122,11 +136,42 @@ export class AdminService {
         JSON.stringify({ email: dto.email, role: dto.role }),
       ],
     );
+
+    const org = await this.db.one<{ name: string }>(
+      'select name from organizations where id = $1',
+      [profile.organization_id],
+    );
+    const inviter =
+      (await this.db.one<{ full_name: string }>(
+        'select full_name from profiles where id = $1',
+        [actor.id],
+      )) ?? null;
+
+    let emailSent = false;
+    try {
+      const result = await this.email.sendStaffInvite({
+        orgName: org?.name ?? 'your workspace',
+        inviterName: inviter?.full_name || actor.email || 'A teammate',
+        roleLabel: roleLabel[dto.role] ?? dto.role,
+        email: dto.email.toLowerCase(),
+        tempPassword,
+        loginUrl: `${this.email.webAppUrl()}/login`,
+      });
+      emailSent = result.ok;
+    } catch (err) {
+      this.logger.warn(
+        `Invite email failed for ${dto.email}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+
     return {
       id: profile.id,
       email: dto.email,
       role: dto.role,
       tempPassword,
+      emailSent,
     };
   }
 

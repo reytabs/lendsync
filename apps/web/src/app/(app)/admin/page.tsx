@@ -166,10 +166,31 @@ export default function AdminPage() {
       {tab === 'Integrations' && (
         <div className="grid gap-4 md:grid-cols-2">
           {[
-            { name: 'Stripe', status: 'Connected', desc: 'Payments & disbursements' },
-            { name: 'Twilio', status: 'Not connected', desc: 'SMS notifications' },
-            { name: 'Experian', status: 'Not connected', desc: 'Credit scoring API' },
-            { name: 'DocuSign', status: 'Not connected', desc: 'E-signature workflows' },
+            {
+              name: 'Mailgun',
+              status: 'Platform env',
+              desc: 'Staff invite emails (MAILGUN_* on the API)',
+            },
+            {
+              name: 'Stripe',
+              status: 'Connected',
+              desc: 'Payments & disbursements',
+            },
+            {
+              name: 'Twilio',
+              status: 'Not connected',
+              desc: 'SMS notifications',
+            },
+            {
+              name: 'Experian',
+              status: 'Not connected',
+              desc: 'Credit scoring API',
+            },
+            {
+              name: 'DocuSign',
+              status: 'Not connected',
+              desc: 'E-signature workflows',
+            },
           ].map((item) => (
             <Card key={item.name}>
               <CardContent className="flex items-center justify-between gap-4 p-5">
@@ -764,6 +785,7 @@ function UsersRolesTab() {
   const [tempCredential, setTempCredential] = useState<{
     email: string;
     tempPassword: string;
+    emailSent: boolean;
   } | null>(null);
 
   const load = useCallback(async () => {
@@ -790,19 +812,28 @@ function UsersRolesTab() {
     setInviting(true);
     setTempCredential(null);
     try {
-      const res = await api<{ email: string; tempPassword: string }>(
-        '/admin/users/invite',
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            email: email.trim(),
-            fullName: name.trim(),
-            role,
-          }),
-        },
+      const res = await api<{
+        email: string;
+        tempPassword: string;
+        emailSent?: boolean;
+      }>('/admin/users/invite', {
+        method: 'POST',
+        body: JSON.stringify({
+          email: email.trim(),
+          fullName: name.trim(),
+          role,
+        }),
+      });
+      setTempCredential({
+        email: res.email,
+        tempPassword: res.tempPassword,
+        emailSent: Boolean(res.emailSent),
+      });
+      toast.success(
+        res.emailSent
+          ? `Invited ${res.email} — email sent`
+          : `Invited ${res.email}`,
       );
-      setTempCredential({ email: res.email, tempPassword: res.tempPassword });
-      toast.success(`Invited ${res.email}`);
       setName('');
       setEmail('');
       setRole('loan_officer');
@@ -854,10 +885,13 @@ function UsersRolesTab() {
           <div className="rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-sm">
             <span className="font-semibold">{tempCredential.email}</span> can
             sign in with temporary password{' '}
-            <code className="rounded bg-black/20 px-1.5 py-0.5 font-mono">
+            <code className="rounded bg-muted px-1.5 py-0.5 font-mono">
               {tempCredential.tempPassword}
             </code>
-            . Share it securely — it won&apos;t be shown again.
+            .{' '}
+            {tempCredential.emailSent
+              ? 'An invite email was also sent.'
+              : 'Share it securely — invite email was not sent (Mailgun not configured or failed).'}
           </div>
         )}
 
