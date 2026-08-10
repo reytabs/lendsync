@@ -171,12 +171,16 @@ export class OrgsService {
       [org.id, planCode, String(TRIAL_DAYS)],
     );
 
-    // Per-tenant default settings.
+    // Per-tenant default settings (shape expected by /settings/public + Admin).
     await this.db.queryUnscoped(
       `insert into system_settings (organization_id, key, value)
-       values ($1, 'currency', to_jsonb($2::text)),
-              ($1, 'organization_name', to_jsonb($3::text))
-       on conflict (organization_id, key) do nothing`,
+       values (
+         $1,
+         'organization',
+         jsonb_build_object('name', $3::text, 'currency', $2::text)
+       )
+       on conflict (organization_id, key)
+         do update set value = excluded.value, updated_at = now()`,
       [org.id, currency, dto.organizationName],
     );
 

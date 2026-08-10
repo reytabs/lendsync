@@ -23,9 +23,9 @@ const dmMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: 'LendSync — Lending Management System',
+  title: 'LendSync — Lending operations, clearly managed',
   description:
-    'Manage loan applications, approvals, disbursements, and repayments.',
+    'Multi-tenant lending management: applications, collections, repayments, and reports. Start a 14-day free trial.',
   icons: {
     icon: [{ url: '/logo.png', type: 'image/png' }],
     apple: [{ url: '/apple-icon.png', type: 'image/png' }],

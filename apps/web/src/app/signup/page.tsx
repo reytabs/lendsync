@@ -14,6 +14,7 @@ import {
   identifyAuthSession,
   setStoredAuth,
 } from '@/lib/auth';
+import { broadcastCurrency } from '@/lib/currency';
 import { apiBaseUrl } from '@/lib/api';
 
 export default function SignupPage() {
@@ -52,6 +53,7 @@ export default function SignupPage() {
       setStoredAuth(data);
       const session = getStoredAuth();
       if (session) identifyAuthSession(session);
+      broadcastCurrency(currency);
       posthog.capture('org_signed_up', { currency });
       router.push(homeForRole(data.user?.role ?? 'admin'));
     } catch (err) {
