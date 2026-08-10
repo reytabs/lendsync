@@ -148,6 +148,7 @@ export class AdminService {
       )) ?? null;
 
     let emailSent = false;
+    let emailError: string | undefined;
     try {
       const result = await this.email.sendStaffInvite({
         orgName: org?.name ?? 'your workspace',
@@ -158,12 +159,13 @@ export class AdminService {
         loginUrl: `${this.email.webAppUrl()}/login`,
       });
       emailSent = result.ok;
+      if (!result.ok) {
+        emailError = result.error ?? 'Invite email could not be sent';
+        this.logger.warn(`Invite email for ${dto.email}: ${emailError}`);
+      }
     } catch (err) {
-      this.logger.warn(
-        `Invite email failed for ${dto.email}: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      );
+      emailError = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`Invite email failed for ${dto.email}: ${emailError}`);
     }
 
     return {
@@ -172,6 +174,7 @@ export class AdminService {
       role: dto.role,
       tempPassword,
       emailSent,
+      emailError,
     };
   }
 

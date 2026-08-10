@@ -12,41 +12,65 @@ export type SendEmailInput = {
   text: string;
 };
 
+export type SendEmailResult = {
+  ok: boolean;
+  skipped?: boolean;
+  error?: string;
+};
+
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
 
   constructor(private readonly config: ConfigService) {}
 
+  /** Prefer ConfigService, fall back to process.env (Railway injects here). */
+  private env(name: string) {
+    return (
+      this.config.get<string>(name)?.trim() ||
+      process.env[name]?.trim() ||
+      ''
+    );
+  }
+
   isConfigured() {
     return Boolean(
-      this.config.get<string>('MAILGUN_API_KEY')?.trim() &&
-        this.config.get<string>('MAILGUN_DOMAIN')?.trim() &&
-        this.config.get<string>('MAILGUN_FROM')?.trim(),
+      this.env('MAILGUN_API_KEY') &&
+        this.env('MAILGUN_DOMAIN') &&
+        this.env('MAILGUN_FROM'),
     );
   }
 
   webAppUrl() {
-    return (
-      this.config.get<string>('APP_WEB_URL')?.replace(/\/$/, '') ||
-      'http://localhost:3000'
-    );
+    return this.env('APP_WEB_URL').replace(/\/$/, '') || 'http://localhost:3000';
   }
 
-  async send(input: SendEmailInput): Promise<{ ok: boolean; skipped?: boolean }> {
-    const apiKey = this.config.get<string>('MAILGUN_API_KEY')?.trim();
-    const domain = this.config.get<string>('MAILGUN_DOMAIN')?.trim();
-    const from = this.config.get<string>('MAILGUN_FROM')?.trim();
+  async send(input: SendEmailInput): Promise<SendEmailResult> {
+    const apiKey = this.env('MAILGUN_API_KEY');
+    const domain = this.env('MAILGUN_DOMAIN');
+    const from = this.env('MAILGUN_FROM');
     const apiBase = (
-      this.config.get<string>('MAILGUN_API_BASE')?.trim() ||
-      'https://api.mailgun.net'
+      this.env('MAILGUN_API_BASE') || 'https://api.mailgun.net'
     ).replace(/\/$/, '');
 
     if (!apiKey || !domain || !from) {
-      this.logger.warn(
-        `Email skipped (Mailgun not configured): to=${input.to} subject="${input.subject}"`,
-      );
-      return { ok: false, skipped: true };
+      const missing = [
+        !apiKey && 'MAILGUN_API_KEY',
+        !domain && 'MAILGUN_DOMAIN',
+        !from && 'MAILGUN_FROM',
+      ].filter(Boolean);
+      const error = `Mailgun not configured (missing ${missing.join(', ')})`;
+      this.logger.warn(`${error}: to=${input.to} subject="${input.subject}"`);
+      return { ok: false, skipped: true, error };
+    }
+
+    // From address must be on the Mailgun sending domain (sandbox or custom).
+    const fromMatch = from.match(/<([^>]+)>/)?.[1] ?? from;
+    const fromHost = fromMatch.split('@')[1]?.toLowerCase();
+    if (!fromHost || fromHost !== domain.toLowerCase()) {
+      const error = `MAILGUN_FROM must use @${domain} (got ${fromHost ?? 'invalid'}). Example: LendSync <postmaster@${domain}>`;
+      this.logger.error(error);
+      return { ok: false, error };
     }
 
     const body = new URLSearchParams();
@@ -57,7 +81,7 @@ export class EmailService {
     body.set('html', input.html);
 
     const auth = Buffer.from(`api:${apiKey}`).toString('base64');
-    const url = `${apiBase}/v3/${domain}/messages`;
+    const url = `${apiBase}/v3/${encodeURIComponent(domain)}/messages`;
 
     try {
       const res = await fetch(url, {
@@ -71,21 +95,33 @@ export class EmailService {
 
       if (!res.ok) {
         const detail = await res.text().catch(() => '');
+        let message = `Mailgun rejected the email (${res.status})`;
+        try {
+          const parsed = JSON.parse(detail) as { message?: string };
+          if (parsed.message) message = parsed.message;
+        } catch {
+          if (detail) message = `${message}: ${detail.slice(0, 200)}`;
+        }
+        // Sandbox domains only deliver to authorized recipients.
+        if (
+          domain.includes('sandbox') &&
+          /not authorized|forbidden|recipient/i.test(message)
+        ) {
+          message = `${message} — authorize this recipient in Mailgun sandbox (Sending → Authorized Recipients).`;
+        }
         this.logger.error(
           `Mailgun send failed (${res.status}) to=${input.to}: ${detail.slice(0, 300)}`,
         );
-        return { ok: false };
+        return { ok: false, error: message };
       }
 
       this.logger.log(`Email sent to=${input.to} subject="${input.subject}"`);
       return { ok: true };
     } catch (err) {
-      this.logger.error(
-        `Mailgun send error to=${input.to}: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      );
-      return { ok: false };
+      const error =
+        err instanceof Error ? err.message : 'Mailgun network error';
+      this.logger.error(`Mailgun send error to=${input.to}: ${error}`);
+      return { ok: false, error };
     }
   }
 
