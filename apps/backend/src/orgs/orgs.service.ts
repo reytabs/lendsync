@@ -4,6 +4,7 @@ import {
   Injectable,
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
+import type { UserRole } from '@lms/types';
 import { DatabaseService } from '../database/database.service';
 import { AuthService } from '../auth/auth.service';
 import type { OrgRole } from '../auth/auth.guards';
@@ -52,13 +53,47 @@ export class OrgsService {
   /**
    * Self-serve tenant creation. Runs on the owner connection (RLS-exempt)
    * because a brand-new organization cannot yet scope to itself.
+   *
+   * If the email already exists, reuse that profile (password must match)
+   * and attach a membership to the new org — do not create a second identity.
+   * Duplicate profiles per email break login (first profile wins) and hide
+   * applications across workspaces under RLS.
    */
   async signup(dto: SignupDto) {
     const slug = await this.uniqueSlug(this.slugify(dto.organizationName));
     const currency = dto.currency ?? 'USD';
     const planCode = dto.planCode ?? 'starter';
+    const email = dto.email.toLowerCase();
 
-    const org = await this.db.one<{ id: string }>(
+    const existing = await this.db.oneUnscoped<{
+      id: string;
+      email: string;
+      full_name: string;
+      role: UserRole;
+      password_hash: string | null;
+      organization_id: string | null;
+    }>(
+      `select id, email, full_name, role, password_hash, organization_id
+       from profiles
+       where lower(email) = $1
+       order by
+         case when role in ('admin', 'loan_officer') then 0 else 1 end,
+         created_at asc
+       limit 1`,
+      [email],
+    );
+
+    if (
+      existing &&
+      (!existing.password_hash ||
+        !(await bcrypt.compare(dto.password, existing.password_hash)))
+    ) {
+      throw new BadRequestException(
+        'Email already registered. Sign in, then create another workspace from your account.',
+      );
+    }
+
+    const org = await this.db.oneUnscoped<{ id: string }>(
       `insert into organizations (name, slug, currency, status, trial_ends_at)
        values ($1, $2, $3, 'active', now() + ($4 || ' days')::interval)
        returning id`,
@@ -66,35 +101,78 @@ export class OrgsService {
     );
     if (!org) throw new BadRequestException('Could not create organization');
 
-    const passwordHash = await bcrypt.hash(dto.password, 10);
-    const profile = await this.db.one<{
+    let profile: {
       id: string;
       email: string;
       full_name: string;
-      role: 'admin';
-      organization_id: string;
-    }>(
-      `insert into profiles (email, full_name, password_hash, role, organization_id)
-       values ($1, $2, $3, 'admin', $4)
-       returning id, email, full_name, role, organization_id`,
-      [dto.email.toLowerCase(), dto.fullName, passwordHash, org.id],
-    );
-    if (!profile) throw new BadRequestException('Could not create owner account');
+      role: UserRole;
+      organization_id: string | null;
+      password_hash: string | null;
+    };
 
-    await this.db.query(
+    if (existing) {
+      // Promote borrower → admin when they create a workspace.
+      if (existing.role === 'borrower') {
+        await this.db.queryUnscoped(
+          `update profiles
+           set role = 'admin',
+               full_name = coalesce(nullif($2, ''), full_name),
+               organization_id = $3,
+               updated_at = now()
+           where id = $1`,
+          [existing.id, dto.fullName, org.id],
+        );
+      } else {
+        await this.db.queryUnscoped(
+          `update profiles
+           set organization_id = $2,
+               full_name = coalesce(nullif($3, ''), full_name),
+               updated_at = now()
+           where id = $1`,
+          [existing.id, org.id, dto.fullName],
+        );
+      }
+      profile = {
+        ...existing,
+        role: existing.role === 'borrower' ? 'admin' : existing.role,
+        organization_id: org.id,
+        full_name: dto.fullName || existing.full_name,
+      };
+    } else {
+      const passwordHash = await bcrypt.hash(dto.password, 10);
+      const created = await this.db.oneUnscoped<{
+        id: string;
+        email: string;
+        full_name: string;
+        role: 'admin';
+        organization_id: string;
+      }>(
+        `insert into profiles (email, full_name, password_hash, role, organization_id)
+         values ($1, $2, $3, 'admin', $4)
+         returning id, email, full_name, role, organization_id`,
+        [email, dto.fullName, passwordHash, org.id],
+      );
+      if (!created) {
+        throw new BadRequestException('Could not create owner account');
+      }
+      profile = { ...created, password_hash: null };
+    }
+
+    await this.db.queryUnscoped(
       `insert into memberships (organization_id, profile_id, role)
-       values ($1, $2, 'owner')`,
+       values ($1, $2, 'owner')
+       on conflict (organization_id, profile_id) do update set role = 'owner'`,
       [org.id, profile.id],
     );
 
-    await this.db.query(
+    await this.db.queryUnscoped(
       `insert into subscriptions (organization_id, plan_code, status, current_period_end)
        values ($1, $2, 'trialing', now() + ($3 || ' days')::interval)`,
       [org.id, planCode, String(TRIAL_DAYS)],
     );
 
     // Per-tenant default settings.
-    await this.db.query(
+    await this.db.queryUnscoped(
       `insert into system_settings (organization_id, key, value)
        values ($1, 'currency', to_jsonb($2::text)),
               ($1, 'organization_name', to_jsonb($3::text))
