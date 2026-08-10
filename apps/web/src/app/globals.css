@@ -168,3 +168,20 @@
   outline-offset: 2px;
   border-radius: 8px;
 }
+
+/* Marketing landing — hero glow */
+.landing-spotlight .landing-glow,
+.landing-dual .landing-glow {
+  animation: landing-glow-pulse 6s ease-in-out infinite;
+}
+
+@keyframes landing-glow-pulse {
+  0%,
+  100% {
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+

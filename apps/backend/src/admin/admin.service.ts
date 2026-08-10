@@ -44,9 +44,53 @@ export class AdminService {
     const data = await this.db.many<{ key: string; value: unknown }>(
       'select key, value from system_settings',
     );
+    const settings = Object.fromEntries(
+      data.map((row) => [row.key, row.value]),
+    ) as Record<string, unknown>;
+
+    const orgRow = await this.db.one<{ name: string; currency: string }>(
+      `select name, currency from organizations
+       where id = public.current_org_id()
+       limit 1`,
+    );
+
+    const organization = settings.organization;
+    if (
+      !organization ||
+      typeof organization !== 'object' ||
+      Array.isArray(organization)
+    ) {
+      // Legacy signup wrote flat `currency` / `organization_name` keys.
+      const legacyCurrency =
+        typeof settings.currency === 'string' ? settings.currency : undefined;
+      const legacyName =
+        typeof settings.organization_name === 'string'
+          ? settings.organization_name
+          : undefined;
+      settings.organization = {
+        name: legacyName ?? orgRow?.name ?? 'LendSync',
+        currency: (
+          legacyCurrency ??
+          orgRow?.currency ??
+          'USD'
+        ).toUpperCase(),
+      };
+    } else {
+      const orgObj = organization as Record<string, unknown>;
+      if (typeof orgObj.currency !== 'string' || !orgObj.currency) {
+        orgObj.currency = (orgRow?.currency ?? 'USD').toUpperCase();
+      } else {
+        orgObj.currency = String(orgObj.currency).toUpperCase();
+      }
+      if (typeof orgObj.name !== 'string' || !orgObj.name) {
+        orgObj.name = orgRow?.name ?? 'LendSync';
+      }
+      settings.organization = orgObj;
+    }
+
     if (!data.length) {
       return {
-        organization: { name: 'LendSync', currency: 'USD' },
+        organization: settings.organization,
         security: { require2fa: false, enforceTls: true, autoBackups: true },
         integrations: {
           stripe: { enabled: true },
@@ -56,7 +100,8 @@ export class AdminService {
         },
       };
     }
-    return Object.fromEntries(data.map((row) => [row.key, row.value]));
+
+    return settings;
   }
 
   async updateSetting(
@@ -72,6 +117,21 @@ export class AdminService {
        returning *`,
       [key, JSON.stringify(value)],
     );
+
+    // Keep organizations.currency in sync when org settings change.
+    if (key === 'organization' && typeof value.currency === 'string') {
+      await this.db.query(
+        `update organizations
+         set currency = $1,
+             name = coalesce(nullif($2, ''), name)
+         where id = public.current_org_id()`,
+        [
+          String(value.currency).toUpperCase(),
+          typeof value.name === 'string' ? value.name : '',
+        ],
+      );
+    }
+
     await this.db.query(
       `insert into audit_logs (actor_id, action, entity_type, entity_id, meta)
        values ($1, 'settings_update', 'system_settings', $2, $3::jsonb)`,
