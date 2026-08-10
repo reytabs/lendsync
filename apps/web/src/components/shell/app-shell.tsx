@@ -14,6 +14,7 @@ import {
   PanelLeft,
   Banknote,
   Compass,
+  PhoneCall,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { getStoredAuth, logoutAuthSession } from '@/lib/auth';
@@ -37,6 +38,8 @@ const roleLabels: Record<string, string> = {
   admin: 'Administrator',
   officer: 'Loan Officer',
   loan_officer: 'Loan Officer',
+  viewer: 'Viewer',
+  collector: 'Collector',
   borrower: 'Borrower',
 };
 
@@ -44,36 +47,48 @@ function canAccessAdmin(role: string) {
   return role === 'admin' || role === 'owner';
 }
 
-const mainNav = [
+const mainNavAll = [
   {
     href: '/dashboard',
     label: 'Dashboard',
     icon: LayoutDashboard,
     tour: 'nav-dashboard',
+    roles: ['admin', 'owner', 'loan_officer', 'officer', 'viewer', 'collector'],
   },
   {
     href: '/applications',
     label: 'Loan Applications',
     icon: FileText,
     tour: 'nav-applications',
+    roles: ['admin', 'owner', 'loan_officer', 'officer', 'viewer'],
   },
   {
     href: '/borrowers',
     label: 'Borrowers',
     icon: Users,
     tour: 'nav-borrowers',
+    roles: ['admin', 'owner', 'loan_officer', 'officer', 'viewer'],
+  },
+  {
+    href: '/collections',
+    label: 'Collections',
+    icon: PhoneCall,
+    tour: 'nav-collections',
+    roles: ['admin', 'owner', 'loan_officer', 'officer', 'viewer', 'collector'],
   },
   {
     href: '/repayments',
     label: 'Repayments',
     icon: Banknote,
     tour: 'nav-repayments',
+    roles: ['admin', 'owner', 'loan_officer', 'officer', 'viewer', 'collector'],
   },
   {
     href: '/emi-calculator',
     label: 'EMI Calculator',
     icon: Calculator,
     tour: 'nav-emi',
+    roles: ['admin', 'owner', 'loan_officer', 'officer', 'viewer', 'collector'],
   },
 ];
 
@@ -89,6 +104,10 @@ const titles: Record<string, { title: string; subtitle: string }> = {
   '/borrowers': {
     title: 'Borrower Profiles',
     subtitle: 'Customer accounts and credit history',
+  },
+  '/collections': {
+    title: 'Collections',
+    subtitle: 'Overdue queue, outreach notes, and promises to pay',
   },
   '/repayments': {
     title: 'Repayments',
@@ -126,6 +145,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     title: 'LendSync',
     subtitle: 'Lending Management System',
   };
+
+  const mainNav = useMemo(() => {
+    const role = user.role || 'loan_officer';
+    return mainNavAll.filter((item) => item.roles.includes(role));
+  }, [user.role]);
 
   const analyticsNav = useMemo(() => {
     const items = [

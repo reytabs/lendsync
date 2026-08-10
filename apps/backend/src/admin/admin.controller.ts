@@ -36,8 +36,8 @@ class InviteUserDto {
   @IsString()
   fullName!: string;
 
-  @IsIn(['loan_officer', 'admin', 'borrower'])
-  role!: 'loan_officer' | 'admin' | 'borrower';
+  @IsIn(['loan_officer', 'admin', 'viewer', 'collector', 'borrower'])
+  role!: 'loan_officer' | 'admin' | 'viewer' | 'collector' | 'borrower';
 }
 
 class UpdateSettingsDto {

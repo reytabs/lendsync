@@ -16,6 +16,7 @@ import { DatabaseModule } from './database/database.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { OrgsModule } from './orgs/orgs.module';
 import { BillingModule } from './billing/billing.module';
+import { CollectionsModule } from './collections/collections.module';
 import { EmailModule } from './email/email.module';
 
 @Module({
@@ -30,6 +31,7 @@ import { EmailModule } from './email/email.module';
     DocumentsModule,
     DisbursementsModule,
     RepaymentsModule,
+    CollectionsModule,
     ReportsModule,
     AdminModule,
     StripeModule,

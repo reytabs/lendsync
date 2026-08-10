@@ -12,6 +12,7 @@ export type AuthSession = {
   orgId?: string;
   orgName?: string;
   orgRole?: string;
+  mustChangePassword?: boolean;
 };
 
 export function getStoredAuth(): AuthSession | null {
@@ -23,8 +24,19 @@ export function getStoredAuth(): AuthSession | null {
   const orgId = localStorage.getItem('lms_org_id') ?? undefined;
   const orgName = localStorage.getItem('lms_org_name') ?? undefined;
   const orgRole = localStorage.getItem('lms_org_role') ?? undefined;
+  const mustChangePassword =
+    localStorage.getItem('lms_must_change_password') === '1';
   if (!token || !role) return null;
-  return { token, role, email, fullName, orgId, orgName, orgRole };
+  return {
+    token,
+    role,
+    email,
+    fullName,
+    orgId,
+    orgName,
+    orgRole,
+    mustChangePassword,
+  };
 }
 
 export function setStoredAuth(data: {
@@ -35,6 +47,7 @@ export function setStoredAuth(data: {
     full_name?: string;
     organization_id?: string;
     org_role?: string | null;
+    must_change_password?: boolean;
   };
   /** Optional human-readable org name (not present in login/signup payloads). */
   orgName?: string;
@@ -53,6 +66,11 @@ export function setStoredAuth(data: {
   } else {
     localStorage.removeItem('lms_org_role');
   }
+  if (data.user.must_change_password) {
+    localStorage.setItem('lms_must_change_password', '1');
+  } else {
+    localStorage.removeItem('lms_must_change_password');
+  }
   if (data.orgName) {
     localStorage.setItem('lms_org_name', data.orgName);
   }
@@ -66,6 +84,7 @@ export function clearStoredAuth() {
   localStorage.removeItem('lms_org_id');
   localStorage.removeItem('lms_org_name');
   localStorage.removeItem('lms_org_role');
+  localStorage.removeItem('lms_must_change_password');
 }
 
 let identifiedSessionToken: string | null = null;
@@ -110,6 +129,10 @@ export function useAuthGate(opts: {
     const auth = getStoredAuth();
     if (!auth) {
       router.replace('/login');
+      return;
+    }
+    if (auth.mustChangePassword) {
+      router.replace('/change-password');
       return;
     }
     identifyAuthSession(auth);

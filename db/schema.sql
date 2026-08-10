@@ -2,7 +2,7 @@
 create extension if not exists "pgcrypto";
 
 do $$ begin
-  create type public.user_role as enum ('borrower', 'loan_officer', 'admin');
+  create type public.user_role as enum ('borrower', 'loan_officer', 'admin', 'viewer', 'collector');
 exception when duplicate_object then null; end $$;
 
 do $$ begin
@@ -50,6 +50,7 @@ create table if not exists public.profiles (
   occupation text,
   credit_score integer check (credit_score is null or (credit_score >= 300 and credit_score <= 850)),
   kyc_status public.kyc_status not null default 'unverified',
+  must_change_password boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -138,6 +139,8 @@ create table if not exists public.repayment_schedules (
   interest_cents bigint not null,
   total_cents bigint not null,
   status public.schedule_status not null default 'upcoming',
+  collector_id uuid references public.profiles (id) on delete set null,
+  promise_to_pay_date date,
   unique (loan_id, installment_no)
 );
 
@@ -149,6 +152,18 @@ create table if not exists public.repayments (
   stripe_payment_intent_id text,
   recorded_by uuid references public.profiles (id),
   paid_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.collection_notes (
+  id uuid primary key default gen_random_uuid(),
+  loan_id uuid not null references public.loans (id) on delete cascade,
+  schedule_id uuid references public.repayment_schedules (id) on delete set null,
+  author_id uuid references public.profiles (id) on delete set null,
+  channel text not null default 'other'
+    check (channel in ('call', 'sms', 'email', 'visit', 'other')),
+  note text not null,
+  promise_to_pay_date date,
   created_at timestamptz not null default now()
 );
 

@@ -8,7 +8,7 @@ import { useAuthGate } from '@/lib/auth';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { ready } = useAuthGate({
-    allow: ['admin', 'loan_officer'],
+    allow: ['admin', 'loan_officer', 'viewer', 'collector'],
     redirectIfWrong: '/dashboard',
   });
 

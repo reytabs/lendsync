@@ -48,6 +48,10 @@ export default function LoginPage() {
       posthog.capture('user_logged_in', {
         role: data.user?.role ?? 'borrower',
       });
+      if (data.user?.must_change_password) {
+        router.push('/change-password');
+        return;
+      }
       router.push(homeForRole(data.user?.role ?? 'borrower'));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');

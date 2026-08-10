@@ -248,9 +248,10 @@ export class RepaymentsService {
        set status = 'overdue'
        from loans l
        join profiles b on b.id = l.borrower_id
+       join loan_products p on p.id = l.product_id
        where s.loan_id = l.id
          and s.status = 'upcoming'
-         and s.due_date < current_date
+         and (s.due_date + coalesce(p.grace_days, 0)) < current_date
        returning s.id, s.loan_id, s.installment_no, s.total_cents,
                  l.borrower_id, l.application_id, b.full_name,
                  l.organization_id`,
@@ -271,7 +272,7 @@ export class RepaymentsService {
           kind: 'emi_overdue',
           title: 'Overdue installment',
           body: `${row.full_name}: EMI #${row.installment_no} (${amount}) overdue.`,
-          href: '/repayments',
+          href: '/collections',
           entityType: 'repayment_schedule',
           entityId: row.id,
         });

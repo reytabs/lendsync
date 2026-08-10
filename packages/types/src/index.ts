@@ -1,4 +1,9 @@
-export type UserRole = 'borrower' | 'loan_officer' | 'admin';
+export type UserRole =
+  | 'borrower'
+  | 'loan_officer'
+  | 'admin'
+  | 'viewer'
+  | 'collector';
 
 export type LoanStatus =
   | 'draft'

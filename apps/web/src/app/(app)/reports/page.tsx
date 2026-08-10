@@ -52,6 +52,8 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  const [exportType, setExportType] = useState('kpis');
+
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -78,9 +80,12 @@ export default function ReportsPage() {
       typeof window !== 'undefined'
         ? localStorage.getItem('lms_token')
         : null;
-    const res = await fetch(`${apiBaseUrl()}/api/reports/export.csv`, {
-      headers: { Authorization: `Bearer ${token ?? ''}` },
-    });
+    const res = await fetch(
+      `${apiBaseUrl()}/api/reports/export.csv?type=${encodeURIComponent(exportType)}`,
+      {
+        headers: { Authorization: `Bearer ${token ?? ''}` },
+      },
+    );
     if (!res.ok) {
       setError('CSV export failed');
       return;
@@ -89,9 +94,13 @@ export default function ReportsPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'lendsync-report.csv';
+    a.download = `lendsync-${exportType}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  function printReport() {
+    window.print();
   }
 
   if (loading) {
@@ -114,9 +123,23 @@ export default function ReportsPage() {
         </p>
       )}
 
-      <div className="flex justify-end gap-2">
+      <div className="flex flex-wrap items-center justify-end gap-2 print:hidden">
+        <select
+          className="field-control w-auto text-sm"
+          value={exportType}
+          onChange={(e) => setExportType(e.target.value)}
+        >
+          <option value="kpis">KPIs summary</option>
+          <option value="portfolio">Portfolio</option>
+          <option value="aging">Aging / overdue</option>
+          <option value="disbursements">Disbursements</option>
+          <option value="collections">Collections</option>
+        </select>
         <Button variant="secondary" size="sm" onClick={() => void exportCsv()}>
           Export CSV
+        </Button>
+        <Button variant="secondary" size="sm" onClick={printReport}>
+          Print / PDF
         </Button>
       </div>
 
