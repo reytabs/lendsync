@@ -4,7 +4,7 @@ import { driver, type DriveStep } from 'driver.js';
 import 'driver.js/dist/driver.css';
 import posthog from 'posthog-js';
 
-const STORAGE_PREFIX = 'lms_staff_tour_v1';
+const STORAGE_PREFIX = 'lms_staff_tour_v2';
 
 function storageKey(email: string) {
   return `${STORAGE_PREFIX}:${email.toLowerCase()}`;
@@ -28,6 +28,10 @@ function isOfficerRole(role: string) {
   return role === 'loan_officer' || role === 'officer';
 }
 
+function isCollectorRole(role: string) {
+  return role === 'collector';
+}
+
 type TourOpts = {
   email: string;
   role: string;
@@ -45,6 +49,7 @@ function capture(event: string, props: Record<string, string>) {
 
 function buildSteps(role: string): DriveStep[] {
   const officer = isOfficerRole(role) && !isAdminRole(role);
+  const collector = isCollectorRole(role);
 
   const steps: DriveStep[] = [
     {
@@ -92,6 +97,17 @@ function buildSteps(role: string): DriveStep[] {
       popover: {
         title: 'Borrowers',
         description: 'Manage borrower profiles and credit details.',
+        side: 'right',
+        align: 'start',
+      },
+    },
+    {
+      element: '[data-tour="nav-collections"]',
+      popover: {
+        title: 'Collections',
+        description: collector
+          ? 'Your overdue queue — assign follow-ups, set promises to pay, and log outreach.'
+          : 'Work overdue installments: assign collectors, set promises to pay, and log calls or visits.',
         side: 'right',
         align: 'start',
       },
