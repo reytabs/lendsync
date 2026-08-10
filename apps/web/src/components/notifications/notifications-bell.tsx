@@ -167,9 +167,11 @@ export function NotificationsBell() {
       </Button>
 
       {open && (
-        <div className="absolute right-0 z-50 mt-2 w-[min(100vw-2rem,22rem)] overflow-hidden rounded-lg border border-border bg-[#12141a] shadow-2xl">
+        <div className="absolute right-0 z-50 mt-2 w-[min(100vw-2rem,22rem)] overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-lg">
           <div className="flex items-center justify-between border-b border-border px-3 py-2">
-            <span className="text-sm font-medium">Notifications</span>
+            <span className="text-sm font-medium text-foreground">
+              Notifications
+            </span>
             <button
               type="button"
               className="text-xs text-primary hover:underline disabled:opacity-40"
@@ -204,12 +206,12 @@ export function NotificationsBell() {
                       type="button"
                       onClick={() => void onOpenItem(item)}
                       className={cn(
-                        'w-full border-b border-border/50 px-3 py-2.5 text-left transition-colors hover:bg-white/5',
+                        'w-full border-b border-border/50 px-3 py-2.5 text-left transition-colors hover:bg-muted/60',
                         !item.read_at && 'bg-primary/5',
                       )}
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <span className="text-sm font-medium leading-snug">
+                        <span className="text-sm font-medium leading-snug text-foreground">
                           {item.title}
                         </span>
                         <span className="shrink-0 text-[10px] text-muted-foreground">
