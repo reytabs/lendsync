@@ -167,9 +167,9 @@ export default function AdminPage() {
         <div className="grid gap-4 md:grid-cols-2">
           {[
             {
-              name: 'Mailgun',
+              name: 'Brevo',
               status: 'Platform env',
-              desc: 'Staff invite emails (MAILGUN_* on the API)',
+              desc: 'Staff invite emails (BREVO_* on the API)',
             },
             {
               name: 'Stripe',
@@ -786,6 +786,7 @@ function UsersRolesTab() {
     email: string;
     tempPassword: string;
     emailSent: boolean;
+    emailError?: string;
   } | null>(null);
 
   const load = useCallback(async () => {
@@ -816,6 +817,7 @@ function UsersRolesTab() {
         email: string;
         tempPassword: string;
         emailSent?: boolean;
+        emailError?: string;
       }>('/admin/users/invite', {
         method: 'POST',
         body: JSON.stringify({
@@ -828,12 +830,16 @@ function UsersRolesTab() {
         email: res.email,
         tempPassword: res.tempPassword,
         emailSent: Boolean(res.emailSent),
+        emailError: res.emailError,
       });
       toast.success(
         res.emailSent
           ? `Invited ${res.email} — email sent`
           : `Invited ${res.email}`,
       );
+      if (!res.emailSent && res.emailError) {
+        toast.error(res.emailError);
+      }
       setName('');
       setEmail('');
       setRole('loan_officer');
@@ -888,10 +894,18 @@ function UsersRolesTab() {
             <code className="rounded bg-muted px-1.5 py-0.5 font-mono">
               {tempCredential.tempPassword}
             </code>
-            .{' '}
-            {tempCredential.emailSent
-              ? 'An invite email was also sent.'
-              : 'Share it securely — invite email was not sent (Mailgun not configured or failed).'}
+            .
+            {tempCredential.emailSent ? (
+              <> An invite email was also sent.</>
+            ) : (
+              <>
+                {' '}
+                Share it securely
+                {tempCredential.emailError
+                  ? ` — email not sent: ${tempCredential.emailError}`
+                  : ' — invite email was not sent.'}
+              </>
+            )}
           </div>
         )}
 
