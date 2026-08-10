@@ -2,15 +2,23 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { Pencil, Plus, Trash2, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
+import { Money } from '@/components/money';
 import { FormSkeleton, TableSkeleton } from '@/components/skeletons';
-import { broadcastCurrency } from '@/lib/currency';
+import { broadcastCurrency, useCurrency } from '@/lib/currency';
 import { cn, formatDate } from '@/lib/utils';
 
-const tabs = ['General', 'Users & Roles', 'Integrations', 'Security'] as const;
+const tabs = [
+  'General',
+  'Loan Products',
+  'Users & Roles',
+  'Integrations',
+  'Security',
+] as const;
 
 const currencyOptions = [
   { code: 'USD', label: 'USD — US Dollar ($)' },
@@ -151,6 +159,8 @@ export default function AdminPage() {
         </Card>
       )}
 
+      {tab === 'Loan Products' && <LoanProductsTab />}
+
       {tab === 'Users & Roles' && <UsersRolesTab />}
 
       {tab === 'Integrations' && (
@@ -205,6 +215,521 @@ export default function AdminPage() {
         </Card>
       )}
     </div>
+  );
+}
+
+type LoanProduct = {
+  id: string;
+  name: string;
+  description: string | null;
+  loan_type: string;
+  interest_method: string;
+  annual_rate_percent: string | number;
+  min_amount_cents: string | number;
+  max_amount_cents: string | number;
+  min_tenure_months: number;
+  max_tenure_months: number;
+  grace_days: number;
+  is_active: boolean;
+};
+
+const loanTypeOptions = [
+  { value: 'business', label: 'Business' },
+  { value: 'personal', label: 'Personal' },
+  { value: 'home_equity', label: 'Home Equity' },
+  { value: 'auto', label: 'Auto' },
+  { value: 'micro', label: 'Micro' },
+] as const;
+
+const interestMethodOptions = [
+  { value: 'reducing', label: 'Reducing balance' },
+  { value: 'flat', label: 'Flat rate' },
+] as const;
+
+const loanTypeLabel: Record<string, string> = Object.fromEntries(
+  loanTypeOptions.map((o) => [o.value, o.label]),
+);
+
+type ProductFormState = {
+  name: string;
+  description: string;
+  loanType: string;
+  interestMethod: string;
+  annualRatePercent: string;
+  minAmount: string;
+  maxAmount: string;
+  minTenureMonths: string;
+  maxTenureMonths: string;
+  graceDays: string;
+  isActive: boolean;
+};
+
+const emptyProductForm = (): ProductFormState => ({
+  name: '',
+  description: '',
+  loanType: 'personal',
+  interestMethod: 'reducing',
+  annualRatePercent: '12',
+  minAmount: '1000',
+  maxAmount: '100000',
+  minTenureMonths: '6',
+  maxTenureMonths: '36',
+  graceDays: '0',
+  isActive: true,
+});
+
+function productToForm(p: LoanProduct): ProductFormState {
+  return {
+    name: p.name,
+    description: p.description ?? '',
+    loanType: p.loan_type,
+    interestMethod: p.interest_method,
+    annualRatePercent: String(Number(p.annual_rate_percent)),
+    minAmount: String(Number(p.min_amount_cents) / 100),
+    maxAmount: String(Number(p.max_amount_cents) / 100),
+    minTenureMonths: String(p.min_tenure_months),
+    maxTenureMonths: String(p.max_tenure_months),
+    graceDays: String(p.grace_days),
+    isActive: p.is_active,
+  };
+}
+
+function LoanProductsTab() {
+  const currency = useCurrency();
+  const [products, setProducts] = useState<LoanProduct[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editing, setEditing] = useState<LoanProduct | null>(null);
+  const [form, setForm] = useState<ProductFormState>(emptyProductForm);
+  const [saving, setSaving] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      setProducts(await api<LoanProduct[]>('/admin/loan-products'));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load products');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  function openCreate() {
+    setEditing(null);
+    setForm(emptyProductForm());
+    setEditorOpen(true);
+  }
+
+  function openEdit(product: LoanProduct) {
+    setEditing(product);
+    setForm(productToForm(product));
+    setEditorOpen(true);
+  }
+
+  function updateForm<K extends keyof ProductFormState>(
+    key: K,
+    value: ProductFormState[K],
+  ) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function saveProduct() {
+    if (!form.name.trim()) {
+      toast.error('Product name is required');
+      return;
+    }
+    const minAmountCents = Math.round(Number(form.minAmount) * 100);
+    const maxAmountCents = Math.round(Number(form.maxAmount) * 100);
+    const minTenureMonths = Number(form.minTenureMonths);
+    const maxTenureMonths = Number(form.maxTenureMonths);
+    const annualRatePercent = Number(form.annualRatePercent);
+    const graceDays = Number(form.graceDays);
+
+    if (
+      ![minAmountCents, maxAmountCents, minTenureMonths, maxTenureMonths].every(
+        (n) => Number.isFinite(n) && n > 0,
+      ) ||
+      !Number.isFinite(annualRatePercent) ||
+      annualRatePercent < 0 ||
+      !Number.isFinite(graceDays) ||
+      graceDays < 0
+    ) {
+      toast.error('Check amount, rate, and tenure values');
+      return;
+    }
+    if (minAmountCents > maxAmountCents) {
+      toast.error('Min amount cannot exceed max amount');
+      return;
+    }
+    if (minTenureMonths > maxTenureMonths) {
+      toast.error('Min tenure cannot exceed max tenure');
+      return;
+    }
+
+    const payload = {
+      name: form.name.trim(),
+      description: form.description.trim() || undefined,
+      loanType: form.loanType,
+      interestMethod: form.interestMethod,
+      annualRatePercent,
+      minAmountCents,
+      maxAmountCents,
+      minTenureMonths,
+      maxTenureMonths,
+      graceDays,
+      isActive: form.isActive,
+    };
+
+    setSaving(true);
+    try {
+      if (editing) {
+        await api(`/admin/loan-products/${editing.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify(payload),
+        });
+        toast.success('Product updated');
+      } else {
+        await api('/admin/loan-products', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+        toast.success('Product created');
+      }
+      setEditorOpen(false);
+      setEditing(null);
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Save failed');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function toggleActive(product: LoanProduct) {
+    setBusyId(product.id);
+    try {
+      await api(`/admin/loan-products/${product.id}/active`, {
+        method: 'POST',
+        body: JSON.stringify({ isActive: !product.is_active }),
+      });
+      toast.success(
+        product.is_active ? 'Product deactivated' : 'Product activated',
+      );
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Update failed');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function removeProduct(product: LoanProduct) {
+    if (
+      !window.confirm(
+        `Delete "${product.name}"? This only works if no applications or loans use it.`,
+      )
+    ) {
+      return;
+    }
+    setBusyId(product.id);
+    try {
+      await api(`/admin/loan-products/${product.id}`, { method: 'DELETE' });
+      toast.success('Product deleted');
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Delete failed');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <>
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
+          <div>
+            <CardTitle>Loan products</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Catalogue for this workspace. Inactive products stay on existing
+              loans but are hidden from new applications.
+            </p>
+          </div>
+          <Button onClick={openCreate} className="shrink-0 gap-1.5">
+            <Plus className="h-4 w-4" />
+            New product
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {error && (
+            <p className="rounded-md border border-chart-red/40 bg-chart-red/10 px-3 py-2 text-sm text-chart-red">
+              {error}
+            </p>
+          )}
+
+          {loading ? (
+            <TableSkeleton rows={5} cols={6} />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[720px] text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-[11px] uppercase text-muted-foreground">
+                    <th className="pb-2">Product</th>
+                    <th className="pb-2">Type</th>
+                    <th className="pb-2">Rate</th>
+                    <th className="pb-2">Amount</th>
+                    <th className="pb-2">Tenure</th>
+                    <th className="pb-2">Status</th>
+                    <th className="pb-2 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {products.map((p) => (
+                    <tr key={p.id} className="border-b border-border/50">
+                      <td className="py-2.5 pr-3">
+                        <div className="font-medium">{p.name}</div>
+                        {p.description && (
+                          <div className="text-xs text-muted-foreground line-clamp-1">
+                            {p.description}
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-2.5">
+                        {loanTypeLabel[p.loan_type] ?? p.loan_type}
+                      </td>
+                      <td className="py-2.5 font-mono text-xs">
+                        {Number(p.annual_rate_percent)}%{' '}
+                        <span className="text-muted-foreground">
+                          {p.interest_method === 'flat' ? 'flat' : 'reducing'}
+                        </span>
+                      </td>
+                      <td className="py-2.5 text-xs">
+                        <Money cents={Number(p.min_amount_cents)} />
+                        {' – '}
+                        <Money cents={Number(p.max_amount_cents)} />
+                      </td>
+                      <td className="py-2.5 text-xs text-muted-foreground">
+                        {p.min_tenure_months}–{p.max_tenure_months} mo
+                      </td>
+                      <td className="py-2.5">
+                        <span
+                          className={cn(
+                            'rounded-full px-2 py-0.5 text-[11px] font-medium',
+                            p.is_active
+                              ? 'bg-primary/15 text-primary'
+                              : 'bg-muted text-muted-foreground',
+                          )}
+                        >
+                          {p.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td className="py-2.5">
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Edit product"
+                            disabled={busyId === p.id}
+                            onClick={() => openEdit(p)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={busyId === p.id}
+                            onClick={() => void toggleActive(p)}
+                          >
+                            {p.is_active ? 'Deactivate' : 'Activate'}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Delete product"
+                            disabled={busyId === p.id}
+                            onClick={() => void removeProduct(p)}
+                          >
+                            <Trash2 className="h-4 w-4 text-chart-red" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {products.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={7}
+                        className="py-8 text-center text-muted-foreground"
+                      >
+                        No products yet. Create one to start accepting
+                        applications.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {editorOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg border border-border bg-card p-5 shadow-xl">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 className="font-display text-lg font-semibold">
+                {editing ? 'Edit product' : 'New product'}
+              </h2>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Close"
+                onClick={() => setEditorOpen(false)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="space-y-3">
+              <Field label="Name">
+                <Input
+                  value={form.name}
+                  onChange={(e) => updateForm('name', e.target.value)}
+                  placeholder="e.g. Personal Flex"
+                />
+              </Field>
+              <Field label="Description">
+                <Input
+                  value={form.description}
+                  onChange={(e) => updateForm('description', e.target.value)}
+                  placeholder="Optional short description"
+                />
+              </Field>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Loan type">
+                  <select
+                    className="field-control w-full"
+                    value={form.loanType}
+                    onChange={(e) => updateForm('loanType', e.target.value)}
+                  >
+                    {loanTypeOptions.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Interest method">
+                  <select
+                    className="field-control w-full"
+                    value={form.interestMethod}
+                    onChange={(e) =>
+                      updateForm('interestMethod', e.target.value)
+                    }
+                  >
+                    {interestMethodOptions.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Annual rate (%)">
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={form.annualRatePercent}
+                    onChange={(e) =>
+                      updateForm('annualRatePercent', e.target.value)
+                    }
+                  />
+                </Field>
+                <Field label="Grace days">
+                  <Input
+                    type="number"
+                    min="0"
+                    value={form.graceDays}
+                    onChange={(e) => updateForm('graceDays', e.target.value)}
+                  />
+                </Field>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label={`Min amount (${currency})`}>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.minAmount}
+                    onChange={(e) => updateForm('minAmount', e.target.value)}
+                  />
+                </Field>
+                <Field label={`Max amount (${currency})`}>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.maxAmount}
+                    onChange={(e) => updateForm('maxAmount', e.target.value)}
+                  />
+                </Field>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Min tenure (months)">
+                  <Input
+                    type="number"
+                    min="1"
+                    value={form.minTenureMonths}
+                    onChange={(e) =>
+                      updateForm('minTenureMonths', e.target.value)
+                    }
+                  />
+                </Field>
+                <Field label="Max tenure (months)">
+                  <Input
+                    type="number"
+                    min="1"
+                    value={form.maxTenureMonths}
+                    onChange={(e) =>
+                      updateForm('maxTenureMonths', e.target.value)
+                    }
+                  />
+                </Field>
+              </div>
+              <Toggle
+                label="Active (visible for new applications)"
+                checked={form.isActive}
+                onChange={(v) => updateForm('isActive', v)}
+              />
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  variant="secondary"
+                  onClick={() => setEditorOpen(false)}
+                  disabled={saving}
+                >
+                  Cancel
+                </Button>
+                <Button onClick={() => void saveProduct()} disabled={saving}>
+                  {saving
+                    ? 'Saving…'
+                    : editing
+                      ? 'Save changes'
+                      : 'Create product'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
