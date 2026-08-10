@@ -18,7 +18,7 @@ export const Roles = (...roles: UserRole[]) => SetMetadata(ROLES_KEY, roles);
 // Well-known org created by migration 0004 to hold pre-SaaS data.
 export const DEFAULT_ORG_ID = '00000000-0000-4000-8000-0000000000aa';
 
-export type OrgRole = 'owner' | 'admin' | 'officer';
+export type OrgRole = 'owner' | 'admin' | 'officer' | 'viewer' | 'collector';
 
 export type AuthUser = {
   id: string;

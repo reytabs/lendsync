@@ -32,11 +32,13 @@ export class LoansController {
   }
 
   @Get('loans')
+  @Roles('borrower', 'admin', 'loan_officer', 'viewer', 'collector')
   list(@CurrentUser() user: AuthUser, @Query('status') status?: string) {
     return this.loans.list(user, status);
   }
 
   @Get('loans/:id')
+  @Roles('borrower', 'admin', 'loan_officer', 'viewer', 'collector')
   get(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.loans.get(id, user);
   }

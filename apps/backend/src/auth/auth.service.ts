@@ -4,7 +4,7 @@ import * as bcrypt from 'bcryptjs';
 import * as jwt from 'jsonwebtoken';
 import type { UserRole } from '@lms/types';
 import { DatabaseService } from '../database/database.service';
-import { DEFAULT_ORG_ID, type OrgRole } from './auth.guards';
+import { DEFAULT_ORG_ID, type AuthUser, type OrgRole } from './auth.guards';
 import { LoginDto, RegisterDto } from './auth.dto';
 
 type ProfileRow = {
@@ -14,6 +14,7 @@ type ProfileRow = {
   role: UserRole;
   password_hash: string | null;
   organization_id: string | null;
+  must_change_password?: boolean;
 };
 
 @Injectable()
@@ -52,7 +53,7 @@ export class AuthService {
       `select id, organization_id from profiles
        where lower(email) = lower($1)
          and id <> $2
-         and role in ('admin', 'loan_officer')`,
+         and role in ('admin', 'loan_officer', 'viewer', 'collector')`,
       [profile.email, profile.id],
     );
 
@@ -123,6 +124,7 @@ export class AuthService {
         full_name: profile.full_name,
         organization_id: orgId,
         org_role: orgRole ?? null,
+        must_change_password: Boolean(profile.must_change_password),
       },
     };
   }
@@ -157,11 +159,12 @@ export class AuthService {
     // Unscoped: same email can exist on multiple org-local profiles (legacy
     // duplicate signups). We must see all of them to pick the right identity.
     const profiles = await this.db.manyUnscoped<ProfileRow>(
-      `select id, email, full_name, role, password_hash, organization_id
+      `select id, email, full_name, role, password_hash, organization_id,
+              coalesce(must_change_password, false) as must_change_password
        from profiles
        where lower(email) = $1
        order by
-         case when role in ('admin', 'loan_officer') then 0 else 1 end,
+         case when role in ('admin', 'loan_officer', 'viewer', 'collector') then 0 else 1 end,
          (
            select max(a.created_at)
            from loan_applications a
@@ -195,6 +198,54 @@ export class AuthService {
 
     return this.signToken(
       { ...matched, organization_id: preferred.orgId },
+      orgRole,
+    );
+  }
+
+  async changePassword(
+    user: AuthUser,
+    dto: { currentPassword: string; newPassword: string },
+  ) {
+    const profile = await this.db.oneUnscoped<ProfileRow>(
+      `select id, email, full_name, role, password_hash, organization_id,
+              coalesce(must_change_password, false) as must_change_password
+       from profiles where id = $1`,
+      [user.id],
+    );
+    if (!profile?.password_hash) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+    const ok = await bcrypt.compare(dto.currentPassword, profile.password_hash);
+    if (!ok) throw new UnauthorizedException('Current password is incorrect');
+    if (dto.newPassword.length < 8) {
+      throw new BadRequestException('New password must be at least 8 characters');
+    }
+    if (dto.newPassword === dto.currentPassword) {
+      throw new BadRequestException(
+        'New password must be different from the current password',
+      );
+    }
+
+    const passwordHash = await bcrypt.hash(dto.newPassword, 10);
+    await this.db.queryUnscoped(
+      `update profiles
+       set password_hash = $2,
+           must_change_password = false,
+           updated_at = now()
+       where id = $1`,
+      [user.id, passwordHash],
+    );
+
+    const orgRole = await this.orgRoleFor(
+      profile.id,
+      profile.organization_id ?? DEFAULT_ORG_ID,
+    );
+    return this.signToken(
+      {
+        ...profile,
+        password_hash: passwordHash,
+        must_change_password: false,
+      },
       orgRole,
     );
   }

@@ -87,7 +87,7 @@ export class UsersController {
   }
 
   @Get('borrowers')
-  @Roles('admin', 'loan_officer')
+  @Roles('admin', 'loan_officer', 'viewer', 'collector')
   borrowers() {
     return this.users.listBorrowers();
   }

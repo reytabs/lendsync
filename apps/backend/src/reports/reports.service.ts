@@ -298,18 +298,210 @@ export class ReportsService {
     };
   }
 
-  async exportCsv() {
+  async exportCsv(type = 'kpis') {
+    const reportType = (type || 'kpis').toLowerCase();
+    if (reportType === 'portfolio') return this.exportPortfolioCsv();
+    if (reportType === 'aging') return this.exportAgingCsv();
+    if (reportType === 'disbursements') return this.exportDisbursementsCsv();
+    if (reportType === 'collections') return this.exportCollectionsCsv();
+    return this.exportKpisCsv();
+  }
+
+  private csvEscape(value: unknown) {
+    const s = String(value ?? '');
+    if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+    return s;
+  }
+
+  private toCsv(rows: unknown[][]) {
+    return rows.map((r) => r.map((c) => this.csvEscape(c)).join(',')).join('\n');
+  }
+
+  private async exportKpisCsv() {
     const dash = await this.dashboard();
-    const rows = [
+    return this.toCsv([
       ['metric', 'value'],
-      ['total_portfolio_cents', String(dash.kpis.totalPortfolioCents)],
-      ['active_loans', String(dash.kpis.activeLoans)],
-      ['par_percent', String(dash.kpis.portfolioAtRiskPercent)],
-      ['disbursed_this_month_cents', String(dash.kpis.disbursedThisMonthCents)],
-      ['collections_today_cents', String(dash.kpis.collectionsTodayCents)],
-      ['overdue_cents', String(dash.kpis.overdueCents)],
-    ];
-    return rows.map((r) => r.join(',')).join('\n');
+      ['total_portfolio_cents', dash.kpis.totalPortfolioCents],
+      ['active_loans', dash.kpis.activeLoans],
+      ['par_percent', dash.kpis.portfolioAtRiskPercent],
+      ['disbursed_this_month_cents', dash.kpis.disbursedThisMonthCents],
+      ['collections_today_cents', dash.kpis.collectionsTodayCents],
+      ['overdue_cents', dash.kpis.overdueCents],
+    ]);
+  }
+
+  private async exportPortfolioCsv() {
+    const rows = await this.db.many<{
+      id: string;
+      loan_type: string;
+      status: string;
+      principal_cents: string | number;
+      annual_rate_percent: string | number;
+      tenure_months: number;
+      disbursed_at: string | null;
+      borrower_name: string;
+      borrower_email: string;
+    }>(
+      `select l.id, l.loan_type, l.status, l.principal_cents, l.annual_rate_percent,
+              l.tenure_months, l.disbursed_at,
+              b.full_name as borrower_name, b.email as borrower_email
+       from loans l
+       join profiles b on b.id = l.borrower_id
+       order by l.created_at desc`,
+    );
+    return this.toCsv([
+      [
+        'loan_id',
+        'borrower',
+        'email',
+        'loan_type',
+        'status',
+        'principal_cents',
+        'rate_percent',
+        'tenure_months',
+        'disbursed_at',
+      ],
+      ...rows.map((r) => [
+        r.id,
+        r.borrower_name,
+        r.borrower_email,
+        r.loan_type,
+        r.status,
+        r.principal_cents,
+        r.annual_rate_percent,
+        r.tenure_months,
+        r.disbursed_at ?? '',
+      ]),
+    ]);
+  }
+
+  private async exportAgingCsv() {
+    const rows = await this.db.many<{
+      schedule_id: string;
+      loan_id: string;
+      installment_no: number;
+      due_date: string;
+      status: string;
+      total_cents: string | number;
+      paid_cents: string | number;
+      remaining_cents: string | number;
+      days_past_due: number;
+      borrower_name: string;
+    }>(
+      `select s.id as schedule_id, s.loan_id, s.installment_no, s.due_date, s.status,
+              s.total_cents,
+              coalesce((select sum(r.amount_cents) from repayments r where r.schedule_id = s.id), 0) as paid_cents,
+              greatest(
+                0,
+                s.total_cents - coalesce((select sum(r.amount_cents) from repayments r where r.schedule_id = s.id), 0)
+              ) as remaining_cents,
+              (current_date - s.due_date) as days_past_due,
+              b.full_name as borrower_name
+       from repayment_schedules s
+       join loans l on l.id = s.loan_id
+       join profiles b on b.id = l.borrower_id
+       where s.status in ('overdue', 'partial')
+          or (s.status = 'upcoming' and s.due_date < current_date)
+       order by s.due_date asc`,
+    );
+    return this.toCsv([
+      [
+        'schedule_id',
+        'loan_id',
+        'borrower',
+        'installment_no',
+        'due_date',
+        'status',
+        'days_past_due',
+        'total_cents',
+        'paid_cents',
+        'remaining_cents',
+      ],
+      ...rows.map((r) => [
+        r.schedule_id,
+        r.loan_id,
+        r.borrower_name,
+        r.installment_no,
+        r.due_date,
+        r.status,
+        r.days_past_due,
+        r.total_cents,
+        r.paid_cents,
+        r.remaining_cents,
+      ]),
+    ]);
+  }
+
+  private async exportDisbursementsCsv() {
+    const rows = await this.db.many<{
+      id: string;
+      loan_id: string;
+      amount_cents: string | number;
+      status: string;
+      created_at: string;
+      borrower_name: string;
+    }>(
+      `select d.id, d.loan_id, d.amount_cents, d.status, d.created_at,
+              b.full_name as borrower_name
+       from disbursements d
+       join loans l on l.id = d.loan_id
+       join profiles b on b.id = l.borrower_id
+       order by d.created_at desc`,
+    );
+    return this.toCsv([
+      [
+        'disbursement_id',
+        'loan_id',
+        'borrower',
+        'amount_cents',
+        'status',
+        'created_at',
+      ],
+      ...rows.map((r) => [
+        r.id,
+        r.loan_id,
+        r.borrower_name,
+        r.amount_cents,
+        r.status,
+        r.created_at,
+      ]),
+    ]);
+  }
+
+  private async exportCollectionsCsv() {
+    const rows = await this.db.many<{
+      id: string;
+      loan_id: string;
+      schedule_id: string | null;
+      amount_cents: string | number;
+      paid_at: string;
+      borrower_name: string;
+    }>(
+      `select r.id, r.loan_id, r.schedule_id, r.amount_cents, r.paid_at,
+              b.full_name as borrower_name
+       from repayments r
+       join loans l on l.id = r.loan_id
+       join profiles b on b.id = l.borrower_id
+       order by r.paid_at desc`,
+    );
+    return this.toCsv([
+      [
+        'repayment_id',
+        'loan_id',
+        'schedule_id',
+        'borrower',
+        'amount_cents',
+        'paid_at',
+      ],
+      ...rows.map((r) => [
+        r.id,
+        r.loan_id,
+        r.schedule_id ?? '',
+        r.borrower_name,
+        r.amount_cents,
+        r.paid_at,
+      ]),
+    ]);
   }
 
   private lastTwelveMonthKeys() {

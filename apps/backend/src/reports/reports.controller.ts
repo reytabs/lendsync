@@ -11,7 +11,7 @@ import { ReportsService } from './reports.service';
 @ApiTags('reports')
 @ApiBearerAuth()
 @UseGuards(AuthGuard, RolesGuard)
-@Roles('loan_officer', 'admin')
+@Roles('loan_officer', 'admin', 'viewer', 'collector')
 @Controller('reports')
 export class ReportsController {
   constructor(private readonly reports: ReportsService) {}
@@ -33,9 +33,16 @@ export class ReportsController {
 
   @Get('export.csv')
   @Header('Content-Type', 'text/csv')
-  async exportCsv(@Res() res: Response) {
-    const csv = await this.reports.exportCsv();
-    res.setHeader('Content-Disposition', 'attachment; filename="lendsync-report.csv"');
+  async exportCsv(
+    @Query('type') type: string | undefined,
+    @Res() res: Response,
+  ) {
+    const reportType = type || 'kpis';
+    const csv = await this.reports.exportCsv(reportType);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="lendsync-${reportType}.csv"`,
+    );
     res.send(csv);
   }
 }

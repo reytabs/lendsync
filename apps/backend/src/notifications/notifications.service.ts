@@ -124,7 +124,7 @@ export class NotificationsService {
   async notifyStaff(input: CreateNotificationInput) {
     const staff = await this.db.many<{ id: string }>(
       `select id from profiles
-       where role in ('admin', 'loan_officer')`,
+       where role in ('admin', 'loan_officer', 'collector', 'viewer')`,
     );
     const rows: NotificationRow[] = [];
     for (const s of staff) {

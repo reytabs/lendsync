@@ -26,6 +26,8 @@ export type ProductInput = {
 const roleLabel: Record<string, string> = {
   admin: 'Administrator',
   loan_officer: 'Loan Officer',
+  viewer: 'Viewer',
+  collector: 'Collector',
   borrower: 'Borrower',
 };
 
@@ -97,12 +99,13 @@ export class AdminService {
       role: string;
       organization_id: string;
     }>(
-      `insert into profiles (email, full_name, role, password_hash)
-       values ($1, $2, $3::public.user_role, $4)
+      `insert into profiles (email, full_name, role, password_hash, must_change_password)
+       values ($1, $2, $3::public.user_role, $4, true)
        on conflict (organization_id, lower(email)) do update set
          full_name = excluded.full_name,
          role = excluded.role,
          password_hash = excluded.password_hash,
+         must_change_password = true,
          updated_at = now()
        returning id, email, role, organization_id`,
       [dto.email.toLowerCase(), dto.fullName, dto.role, passwordHash],
@@ -115,7 +118,11 @@ export class AdminService {
         ? 'admin'
         : dto.role === 'loan_officer'
           ? 'officer'
-          : null;
+          : dto.role === 'viewer'
+            ? 'viewer'
+            : dto.role === 'collector'
+              ? 'collector'
+              : null;
     if (orgRole) {
       await this.db.query(
         `insert into memberships (organization_id, profile_id, role)
@@ -335,7 +342,12 @@ export class AdminService {
 
   async auditLogs() {
     return this.db.many(
-      `select * from audit_logs order by created_at desc limit 100`,
+      `select a.id, a.action, a.entity_type, a.entity_id, a.meta, a.created_at,
+              p.full_name as actor_name, p.email as actor_email
+       from audit_logs a
+       left join profiles p on p.id = a.actor_id
+       order by a.created_at desc
+       limit 200`,
     );
   }
 }

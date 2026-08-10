@@ -16,6 +16,7 @@ const tabs = [
   'General',
   'Loan Products',
   'Users & Roles',
+  'Audit Log',
   'Integrations',
   'Security',
 ] as const;
@@ -162,6 +163,8 @@ export default function AdminPage() {
       {tab === 'Loan Products' && <LoanProductsTab />}
 
       {tab === 'Users & Roles' && <UsersRolesTab />}
+
+      {tab === 'Audit Log' && <AuditLogTab />}
 
       {tab === 'Integrations' && (
         <div className="grid gap-4 md:grid-cols-2">
@@ -758,7 +761,7 @@ type StaffUser = {
   id: string;
   email: string;
   full_name: string;
-  role: 'admin' | 'loan_officer' | 'borrower';
+  role: 'admin' | 'loan_officer' | 'viewer' | 'collector' | 'borrower';
   kyc_status?: string;
   created_at: string;
 };
@@ -766,11 +769,15 @@ type StaffUser = {
 const roleOptions = [
   { value: 'loan_officer', label: 'Loan Officer' },
   { value: 'admin', label: 'Administrator' },
+  { value: 'viewer', label: 'Viewer (read-only)' },
+  { value: 'collector', label: 'Collector' },
 ] as const;
 
 const roleLabel: Record<string, string> = {
   admin: 'Administrator',
   loan_officer: 'Loan Officer',
+  viewer: 'Viewer',
+  collector: 'Collector',
   borrower: 'Borrower',
 };
 
@@ -780,7 +787,9 @@ function UsersRolesTab() {
   const [error, setError] = useState('');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<'admin' | 'loan_officer'>('loan_officer');
+  const [role, setRole] = useState<(typeof roleOptions)[number]['value']>(
+    'loan_officer',
+  );
   const [inviting, setInviting] = useState(false);
   const [tempCredential, setTempCredential] = useState<{
     email: string;
@@ -873,7 +882,7 @@ function UsersRolesTab() {
             className="field-control w-full"
             value={role}
             onChange={(e) =>
-              setRole(e.target.value as 'admin' | 'loan_officer')
+              setRole(e.target.value as (typeof roleOptions)[number]['value'])
             }
           >
             {roleOptions.map((o) => (
@@ -947,6 +956,216 @@ function UsersRolesTab() {
                     className="py-6 text-center text-muted-foreground"
                   >
                     No team members yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+type AuditEntry = {
+  id: string;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  meta: Record<string, unknown> | null;
+  created_at: string;
+  actor_name: string | null;
+  actor_email: string | null;
+};
+
+const actionLabels: Record<string, string> = {
+  disburse: 'Disbursed loan',
+  loan_approved: 'Approved application',
+  loan_rejected: 'Rejected application',
+  borrower_create: 'Created borrower',
+  borrower_delete: 'Deleted borrower',
+  settings_update: 'Updated settings',
+  user_invite: 'Invited user',
+  collection_assign: 'Assigned collector',
+  collection_ptp: 'Set promise to pay',
+  collection_note: 'Logged collection note',
+};
+
+const entityLabels: Record<string, string> = {
+  loan: 'Loan',
+  loan_application: 'Application',
+  profile: 'Profile',
+  system_settings: 'Settings',
+  repayment_schedule: 'Installment',
+};
+
+function shortId(id: string | null) {
+  if (!id) return null;
+  if (id.length <= 12) return id;
+  return `${id.slice(0, 8)}…`;
+}
+
+function auditDetail(entry: AuditEntry): string {
+  const meta = entry.meta ?? {};
+  const str = (key: string) => {
+    const v = meta[key];
+    return typeof v === 'string' && v.trim() ? v.trim() : null;
+  };
+  const notes = str('notes');
+
+  switch (entry.action) {
+    case 'disburse':
+      return 'Funds released to borrower';
+    case 'loan_approved':
+      return notes ? `Note: ${notes}` : 'Approved with no note';
+    case 'loan_rejected':
+      return notes ? `Reason: ${notes}` : 'Rejected with no reason';
+    case 'borrower_create': {
+      const name = str('fullName');
+      const email = str('email');
+      if (name && email) return `${name} · ${email}`;
+      return name ?? email ?? 'New borrower profile';
+    }
+    case 'borrower_delete':
+      return str('email') ?? 'Borrower removed';
+    case 'settings_update': {
+      if (entry.entity_id === 'organization') {
+        const name = str('name');
+        const currency = str('currency');
+        return [name && `Org: ${name}`, currency && `Currency: ${currency}`]
+          .filter(Boolean)
+          .join(' · ') || 'Organization settings';
+      }
+      return entry.entity_id
+        ? `Updated “${entry.entity_id}”`
+        : 'System settings changed';
+    }
+    case 'user_invite': {
+      const email = str('email');
+      const role = str('role');
+      return [email, role && `as ${role.replace(/_/g, ' ')}`]
+        .filter(Boolean)
+        .join(' ') || 'Team invite sent';
+    }
+    case 'collection_assign':
+      return meta.collectorId ? 'Collector assigned' : 'Collector unassigned';
+    case 'collection_ptp': {
+      const date = str('promiseToPayDate');
+      return date ? `PTP: ${formatDate(date)}` : 'Promise to pay cleared';
+    }
+    case 'collection_note': {
+      const channel = str('channel');
+      const note = str('note');
+      return [channel && channel.toUpperCase(), note]
+        .filter(Boolean)
+        .join(' · ') || 'Outreach logged';
+    }
+    default: {
+      const pairs = Object.entries(meta)
+        .filter(([, v]) => v != null && v !== '')
+        .slice(0, 3)
+        .map(([k, v]) => `${k}: ${String(v)}`);
+      return pairs.length ? pairs.join(' · ') : '—';
+    }
+  }
+}
+
+function AuditLogTab() {
+  const [rows, setRows] = useState<AuditEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      setRows(await api<AuditEntry[]>('/admin/audit'));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load audit log');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between gap-3">
+        <div>
+          <CardTitle>Audit log</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Recent staff actions in this organization
+          </p>
+        </div>
+        <Button variant="secondary" size="sm" onClick={() => void load()}>
+          Refresh
+        </Button>
+      </CardHeader>
+      <CardContent>
+        {error && (
+          <p className="mb-3 rounded-md border border-chart-red/40 bg-chart-red/10 px-3 py-2 text-sm text-chart-red">
+            {error}
+          </p>
+        )}
+        {loading ? (
+          <TableSkeleton rows={6} cols={5} />
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-[11px] uppercase text-muted-foreground">
+                <th className="pb-2">When</th>
+                <th className="pb-2">Actor</th>
+                <th className="pb-2">Action</th>
+                <th className="pb-2">Entity</th>
+                <th className="pb-2">Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id} className="border-b border-border/50 align-top">
+                  <td className="py-2 whitespace-nowrap text-muted-foreground">
+                    {formatDate(r.created_at)}
+                  </td>
+                  <td className="py-2">
+                    <div>{r.actor_name ?? 'System'}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {r.actor_email ?? '—'}
+                    </div>
+                  </td>
+                  <td className="py-2">
+                    {actionLabels[r.action] ?? r.action.replace(/_/g, ' ')}
+                  </td>
+                  <td className="py-2">
+                    <div>
+                      {entityLabels[r.entity_type] ?? r.entity_type}
+                    </div>
+                    {shortId(r.entity_id) && (
+                      <div
+                        className="font-mono text-[10px] text-muted-foreground"
+                        title={r.entity_id ?? undefined}
+                      >
+                        {shortId(r.entity_id)}
+                      </div>
+                    )}
+                  </td>
+                  <td
+                    className="py-2 max-w-sm text-sm text-muted-foreground"
+                    title={r.meta ? JSON.stringify(r.meta) : undefined}
+                  >
+                    {auditDetail(r)}
+                  </td>
+                </tr>
+              ))}
+              {rows.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="py-6 text-center text-muted-foreground"
+                  >
+                    No audit events yet.
                   </td>
                 </tr>
               )}

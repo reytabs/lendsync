@@ -125,8 +125,9 @@ export class UsersService {
 
     const profile = await this.db.one(
       `insert into profiles (
-         email, full_name, phone, occupation, credit_score, role, password_hash, kyc_status
-       ) values ($1, $2, $3, $4, $5, 'borrower', $6, 'pending')
+         email, full_name, phone, occupation, credit_score, role, password_hash,
+         kyc_status, must_change_password
+       ) values ($1, $2, $3, $4, $5, 'borrower', $6, 'pending', true)
        returning id, email, full_name, phone, occupation, credit_score, role, kyc_status, created_at`,
       [
         email,

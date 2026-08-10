@@ -35,13 +35,13 @@ export class RepaymentsController {
   constructor(private readonly repayments: RepaymentsService) {}
 
   @Get('due')
-  @Roles('loan_officer', 'admin', 'borrower')
+  @Roles('loan_officer', 'admin', 'borrower', 'viewer', 'collector')
   listDue(@CurrentUser() user: AuthUser) {
     return this.repayments.listDue(user);
   }
 
   @Post()
-  @Roles('loan_officer', 'admin')
+  @Roles('loan_officer', 'admin', 'collector')
   create(@CurrentUser() user: AuthUser, @Body() dto: CreateRepaymentDto) {
     return this.repayments.create(user, dto);
   }
