@@ -1,8 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import posthog from 'posthog-js';
-import { Banknote, X } from 'lucide-react';
+import { Banknote, RefreshCw, X } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,6 +12,8 @@ import { api } from '@/lib/api';
 import { Money } from '@/components/money';
 import { TableSkeleton } from '@/components/skeletons';
 import { useCurrency } from '@/lib/currency';
+import { cn } from '@/lib/utils';
+import { getStoredAuth } from '@/lib/auth';
 
 type Installment = {
   id: string;
@@ -30,12 +33,25 @@ type DueLoan = {
   principal_cents: string | number;
   tenure_months: number;
   annual_rate_percent: string | number;
+  interest_method?: string;
   loan_type: string;
   status: string;
   disbursed_at?: string | null;
   borrower?: { full_name?: string; email?: string } | null;
   next_installment?: Installment | null;
   unpaid_count?: number;
+};
+
+type PayoffQuote = {
+  loanId: string;
+  outstandingPrincipalCents: number;
+  outstandingInterestCents: number;
+  outstandingTotalCents: number;
+  payoffFullCents: number;
+  payoffWaiveInterestCents: number;
+  unpaidInstallments: number;
+  tenureMonths: number;
+  annualRatePercent: number;
 };
 
 const typeLabel: Record<string, string> = {
@@ -64,6 +80,13 @@ function shortId(id: string) {
 
 export default function RepaymentsPage() {
   const currency = useCurrency();
+  const searchParams = useSearchParams();
+  const highlightLoanId = searchParams.get('loanId');
+  const canRestructure = (() => {
+    const role = getStoredAuth()?.role;
+    return role === 'admin' || role === 'loan_officer';
+  })();
+
   const [loans, setLoans] = useState<DueLoan[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -73,6 +96,22 @@ export default function RepaymentsPage() {
   const [amount, setAmount] = useState('');
   const [paying, setPaying] = useState(false);
   const [payError, setPayError] = useState('');
+
+  const [manageLoan, setManageLoan] = useState<DueLoan | null>(null);
+  const [manageTab, setManageTab] = useState<'settle' | 'restructure'>('settle');
+  const [quote, setQuote] = useState<PayoffQuote | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const [waiveInterest, setWaiveInterest] = useState(false);
+  const [settleNotes, setSettleNotes] = useState('');
+  const [restructureKind, setRestructureKind] = useState<
+    'tenure_change' | 'payment_holiday' | 'rate_change'
+  >('tenure_change');
+  const [newTenureMonths, setNewTenureMonths] = useState('12');
+  const [newRate, setNewRate] = useState('');
+  const [holidayMonths, setHolidayMonths] = useState('1');
+  const [restructureNotes, setRestructureNotes] = useState('');
+  const [manageBusy, setManageBusy] = useState(false);
+  const [manageError, setManageError] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -91,6 +130,35 @@ export default function RepaymentsPage() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (!manageLoan) {
+      setQuote(null);
+      return;
+    }
+    let cancelled = false;
+    setQuoteLoading(true);
+    setManageError('');
+    void api<PayoffQuote>(`/repayments/loans/${manageLoan.id}/payoff`)
+      .then((q) => {
+        if (cancelled) return;
+        setQuote(q);
+        setNewTenureMonths(String(Math.max(1, q.unpaidInstallments)));
+        setNewRate(String(q.annualRatePercent));
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setManageError(
+          err instanceof Error ? err.message : 'Failed to load payoff quote',
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setQuoteLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [manageLoan]);
+
   function openPay(loan: DueLoan) {
     if (!loan.next_installment) return;
     const next = loan.next_installment;
@@ -107,6 +175,23 @@ export default function RepaymentsPage() {
     setPayLoan(null);
     setAmount('');
     setPayError('');
+  }
+
+  function openManage(loan: DueLoan) {
+    setManageLoan(loan);
+    setManageTab('settle');
+    setWaiveInterest(false);
+    setSettleNotes('');
+    setRestructureKind('tenure_change');
+    setHolidayMonths('1');
+    setRestructureNotes('');
+    setManageError('');
+  }
+
+  function closeManage() {
+    setManageLoan(null);
+    setQuote(null);
+    setManageError('');
   }
 
   async function onDisburse(loan: DueLoan) {
@@ -165,11 +250,88 @@ export default function RepaymentsPage() {
     }
   }
 
+  async function onEarlySettle(e: React.FormEvent) {
+    e.preventDefault();
+    if (!manageLoan) return;
+    setManageBusy(true);
+    setManageError('');
+    try {
+      await api(`/repayments/loans/${manageLoan.id}/early-settle`, {
+        method: 'POST',
+        body: JSON.stringify({
+          waiveInterest,
+          notes: settleNotes.trim() || undefined,
+        }),
+      });
+      posthog.capture('loan_early_settled', {
+        loan_id: manageLoan.id,
+        waive_interest: waiveInterest,
+      });
+      closeManage();
+      await load();
+    } catch (err) {
+      setManageError(err instanceof Error ? err.message : 'Settlement failed');
+    } finally {
+      setManageBusy(false);
+    }
+  }
+
+  async function onRestructure(e: React.FormEvent) {
+    e.preventDefault();
+    if (!manageLoan) return;
+    setManageBusy(true);
+    setManageError('');
+    try {
+      const body: Record<string, unknown> = {
+        kind: restructureKind,
+        notes: restructureNotes.trim() || undefined,
+      };
+      if (restructureKind === 'tenure_change') {
+        body.newTenureMonths = Number(newTenureMonths);
+        if (newRate !== '') body.newAnnualRatePercent = Number(newRate);
+      } else if (restructureKind === 'rate_change') {
+        body.newAnnualRatePercent = Number(newRate);
+      } else {
+        body.holidayMonths = Number(holidayMonths);
+      }
+      await api(`/repayments/loans/${manageLoan.id}/restructure`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+      posthog.capture('loan_restructured', {
+        loan_id: manageLoan.id,
+        kind: restructureKind,
+      });
+      closeManage();
+      await load();
+    } catch (err) {
+      setManageError(
+        err instanceof Error ? err.message : 'Restructure failed',
+      );
+    } finally {
+      setManageBusy(false);
+    }
+  }
+
+  const settleAmount = quote
+    ? waiveInterest
+      ? quote.payoffWaiveInterestCents
+      : quote.payoffFullCents
+    : 0;
+
+  const orderedLoans =
+    highlightLoanId && loans.some((l) => l.id === highlightLoanId)
+      ? [
+          ...loans.filter((l) => l.id === highlightLoanId),
+          ...loans.filter((l) => l.id !== highlightLoanId),
+        ]
+      : loans;
+
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Disburse approved loans, then record borrower EMI payments against the
-        next unpaid installment.
+        Disburse approved loans, record EMI payments, settle early, or
+        restructure remaining tenure and rates.
       </p>
 
       {error && (
@@ -185,7 +347,7 @@ export default function RepaymentsPage() {
         <CardContent className="overflow-x-auto">
           {loading ? (
             <TableSkeleton rows={6} cols={6} />
-          ) : loans.length === 0 ? (
+          ) : orderedLoans.length === 0 ? (
             <p className="py-10 text-center text-sm text-muted-foreground">
               No approved or active loans yet. Approve an application first.
             </p>
@@ -204,11 +366,17 @@ export default function RepaymentsPage() {
                 </tr>
               </thead>
               <tbody>
-                {loans.map((loan) => {
+                {orderedLoans.map((loan) => {
                   const next = loan.next_installment;
                   const name = loan.borrower?.full_name ?? '—';
                   return (
-                    <tr key={loan.id} className="border-b border-border/60">
+                    <tr
+                      key={loan.id}
+                      className={cn(
+                        'border-b border-border/60',
+                        highlightLoanId === loan.id && 'bg-primary/10',
+                      )}
+                    >
                       <td className="py-3">
                         <div className="font-mono text-xs text-primary">
                           {shortId(loan.id)}
@@ -272,7 +440,7 @@ export default function RepaymentsPage() {
                         {next ? formatDate(String(next.due_date)) : '—'}
                       </td>
                       <td className="py-3">
-                        <div className="flex justify-end gap-2">
+                        <div className="flex flex-wrap justify-end gap-2">
                           {loan.status === 'approved' && (
                             <Button
                               size="sm"
@@ -296,6 +464,19 @@ export default function RepaymentsPage() {
                             <span className="text-xs text-muted-foreground">
                               Paid up
                             </span>
+                          )}
+                          {canRestructure &&
+                            loan.status !== 'approved' &&
+                            next && (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              disabled={busyId === loan.id}
+                              onClick={() => openManage(loan)}
+                            >
+                              <RefreshCw className="h-3.5 w-3.5" />
+                              Restructure
+                            </Button>
                           )}
                         </div>
                       </td>
@@ -356,7 +537,9 @@ export default function RepaymentsPage() {
                     </div>
                     <div className="flex justify-between border-t border-border/60 pt-2 font-medium">
                       <span>Remaining</span>
-                      <span className="money"><Money cents={remaining} /></span>
+                      <span className="money">
+                        <Money cents={remaining} />
+                      </span>
                     </div>
                     <div className="flex justify-between text-xs text-muted-foreground">
                       <span>
@@ -412,6 +595,265 @@ export default function RepaymentsPage() {
                 </Button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {manageLoan && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="card-surface w-full max-w-lg space-y-4 p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="font-display text-xl font-semibold">
+                  Loan adjustments
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {manageLoan.borrower?.full_name ?? 'Borrower'} ·{' '}
+                  {shortId(manageLoan.id)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeManage}
+                className="rounded-md p-1 text-muted-foreground hover:bg-white/5 hover:text-foreground"
+                aria-label="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="flex gap-2 border-b border-border pb-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={manageTab === 'settle' ? 'default' : 'secondary'}
+                onClick={() => setManageTab('settle')}
+              >
+                Early settlement
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={manageTab === 'restructure' ? 'default' : 'secondary'}
+                onClick={() => setManageTab('restructure')}
+              >
+                Restructure
+              </Button>
+            </div>
+
+            {quoteLoading && (
+              <p className="text-sm text-muted-foreground">
+                Loading payoff quote…
+              </p>
+            )}
+
+            {quote && !quoteLoading && (
+              <div className="rounded-md border border-border bg-black/20 p-3 text-sm space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">
+                    Outstanding principal
+                  </span>
+                  <span className="money">
+                    <Money cents={quote.outstandingPrincipalCents} />
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">
+                    Outstanding interest
+                  </span>
+                  <span className="money">
+                    <Money cents={quote.outstandingInterestCents} />
+                  </span>
+                </div>
+                <div className="flex justify-between border-t border-border/60 pt-2 font-medium">
+                  <span>Full payoff</span>
+                  <span className="money">
+                    <Money cents={quote.payoffFullCents} />
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {quote.unpaidInstallments} unpaid installment
+                  {quote.unpaidInstallments === 1 ? '' : 's'} ·{' '}
+                  {quote.tenureMonths} mo tenure · {quote.annualRatePercent}%
+                </p>
+              </div>
+            )}
+
+            {manageTab === 'settle' ? (
+              <form onSubmit={onEarlySettle} className="space-y-3">
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={waiveInterest}
+                    onChange={(e) => setWaiveInterest(e.target.checked)}
+                  />
+                  <span>
+                    Waive remaining interest
+                    {quote ? (
+                      <>
+                        {' '}
+                        (
+                        <Money cents={quote.outstandingInterestCents} />)
+                      </>
+                    ) : null}
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      Collect principal only and close the loan.
+                    </span>
+                  </span>
+                </label>
+
+                <div className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm">
+                  Settlement amount:{' '}
+                  <span className="money font-semibold">
+                    <Money cents={settleAmount} />
+                  </span>
+                </div>
+
+                <label className="block space-y-1.5 text-sm">
+                  <span className="text-muted-foreground">Notes (optional)</span>
+                  <Input
+                    value={settleNotes}
+                    onChange={(e) => setSettleNotes(e.target.value)}
+                    placeholder="Reason for early settlement"
+                  />
+                </label>
+
+                {manageError && (
+                  <p className="text-sm text-chart-red">{manageError}</p>
+                )}
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={closeManage}
+                    disabled={manageBusy}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={manageBusy || quoteLoading || settleAmount < 1}
+                  >
+                    {manageBusy ? 'Settling…' : 'Confirm settlement'}
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={onRestructure} className="space-y-3">
+                <label className="block space-y-1.5 text-sm">
+                  <span className="text-muted-foreground">Change type</span>
+                  <select
+                    className="flex h-10 w-full rounded-md border border-border bg-transparent px-3 text-sm"
+                    value={restructureKind}
+                    onChange={(e) =>
+                      setRestructureKind(
+                        e.target.value as
+                          | 'tenure_change'
+                          | 'payment_holiday'
+                          | 'rate_change',
+                      )
+                    }
+                  >
+                    <option value="tenure_change">
+                      Change remaining tenure
+                    </option>
+                    <option value="payment_holiday">Payment holiday</option>
+                    <option value="rate_change">Change interest rate</option>
+                  </select>
+                </label>
+
+                {restructureKind === 'tenure_change' && (
+                  <>
+                    <label className="block space-y-1.5 text-sm">
+                      <span className="text-muted-foreground">
+                        New remaining months
+                      </span>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={360}
+                        value={newTenureMonths}
+                        onChange={(e) => setNewTenureMonths(e.target.value)}
+                        required
+                      />
+                    </label>
+                    <label className="block space-y-1.5 text-sm">
+                      <span className="text-muted-foreground">
+                        Annual rate % (optional)
+                      </span>
+                      <Input
+                        type="number"
+                        min={0}
+                        step="0.001"
+                        value={newRate}
+                        onChange={(e) => setNewRate(e.target.value)}
+                      />
+                    </label>
+                  </>
+                )}
+
+                {restructureKind === 'rate_change' && (
+                  <label className="block space-y-1.5 text-sm">
+                    <span className="text-muted-foreground">
+                      New annual rate %
+                    </span>
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.001"
+                      value={newRate}
+                      onChange={(e) => setNewRate(e.target.value)}
+                      required
+                    />
+                  </label>
+                )}
+
+                {restructureKind === 'payment_holiday' && (
+                  <label className="block space-y-1.5 text-sm">
+                    <span className="text-muted-foreground">
+                      Shift unpaid due dates by (months)
+                    </span>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={24}
+                      value={holidayMonths}
+                      onChange={(e) => setHolidayMonths(e.target.value)}
+                      required
+                    />
+                  </label>
+                )}
+
+                <label className="block space-y-1.5 text-sm">
+                  <span className="text-muted-foreground">Notes (optional)</span>
+                  <Input
+                    value={restructureNotes}
+                    onChange={(e) => setRestructureNotes(e.target.value)}
+                    placeholder="Reason for restructuring"
+                  />
+                </label>
+
+                {manageError && (
+                  <p className="text-sm text-chart-red">{manageError}</p>
+                )}
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={closeManage}
+                    disabled={manageBusy}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={manageBusy || quoteLoading}>
+                    {manageBusy ? 'Saving…' : 'Apply restructure'}
+                  </Button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

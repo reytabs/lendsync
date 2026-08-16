@@ -1,6 +1,23 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { IsInt, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsIn,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  Min,
+} from 'class-validator';
 import {
   AuthGuard,
   CurrentUser,
@@ -27,6 +44,42 @@ class CreateRepaymentDto {
   stripePaymentIntentId?: string;
 }
 
+class EarlySettleDto {
+  @IsOptional()
+  @IsBoolean()
+  waiveInterest?: boolean;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
+
+class RestructureDto {
+  @IsIn(['tenure_change', 'payment_holiday', 'rate_change'])
+  kind!: 'tenure_change' | 'payment_holiday' | 'rate_change';
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(360)
+  newTenureMonths?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  newAnnualRatePercent?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(24)
+  holidayMonths?: number;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
+
 @ApiTags('repayments')
 @ApiBearerAuth()
 @UseGuards(AuthGuard, RolesGuard)
@@ -38,6 +91,32 @@ export class RepaymentsController {
   @Roles('loan_officer', 'admin', 'borrower', 'viewer', 'collector')
   listDue(@CurrentUser() user: AuthUser) {
     return this.repayments.listDue(user);
+  }
+
+  @Get('loans/:loanId/payoff')
+  @Roles('loan_officer', 'admin', 'viewer', 'collector', 'borrower')
+  payoffQuote(@CurrentUser() user: AuthUser, @Param('loanId') loanId: string) {
+    return this.repayments.payoffQuote(loanId, user);
+  }
+
+  @Post('loans/:loanId/early-settle')
+  @Roles('loan_officer', 'admin')
+  earlySettle(
+    @CurrentUser() user: AuthUser,
+    @Param('loanId') loanId: string,
+    @Body() dto: EarlySettleDto,
+  ) {
+    return this.repayments.earlySettle(user, loanId, dto);
+  }
+
+  @Post('loans/:loanId/restructure')
+  @Roles('loan_officer', 'admin')
+  restructure(
+    @CurrentUser() user: AuthUser,
+    @Param('loanId') loanId: string,
+    @Body() dto: RestructureDto,
+  ) {
+    return this.repayments.restructure(user, loanId, dto);
   }
 
   @Post()

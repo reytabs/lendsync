@@ -213,3 +213,26 @@ create table if not exists public.system_settings (
 create index if not exists loan_applications_status_idx on public.loan_applications (status);
 create index if not exists loans_borrower_idx on public.loans (borrower_id);
 create index if not exists repayment_schedules_due_idx on public.repayment_schedules (due_date, status);
+
+create table if not exists public.loan_restructures (
+  id uuid primary key default gen_random_uuid(),
+  loan_id uuid not null references public.loans (id) on delete cascade,
+  kind text not null
+    check (kind in ('early_settlement', 'tenure_change', 'payment_holiday', 'rate_change')),
+  actor_id uuid references public.profiles (id) on delete set null,
+  notes text,
+  before_tenure_months integer,
+  after_tenure_months integer,
+  before_annual_rate_percent numeric(6,3),
+  after_annual_rate_percent numeric(6,3),
+  holiday_months integer,
+  outstanding_principal_cents bigint,
+  outstanding_interest_cents bigint,
+  settlement_amount_cents bigint,
+  waived_interest_cents bigint not null default 0,
+  meta jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists loan_restructures_loan_idx
+  on public.loan_restructures (loan_id, created_at desc);

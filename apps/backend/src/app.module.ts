@@ -18,6 +18,7 @@ import { OrgsModule } from './orgs/orgs.module';
 import { BillingModule } from './billing/billing.module';
 import { CollectionsModule } from './collections/collections.module';
 import { EmailModule } from './email/email.module';
+import { SearchModule } from './search/search.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { EmailModule } from './email/email.module';
     NotificationsModule,
     OrgsModule,
     BillingModule,
+    SearchModule,
   ],
   providers: [
     {

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import posthog from 'posthog-js';
 import { Plus, X } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -97,6 +98,8 @@ function formatDate(value: string) {
 
 export default function ApplicationsPage() {
   const currency = useCurrency();
+  const searchParams = useSearchParams();
+  const highlightId = searchParams.get('id');
   const [filter, setFilter] = useState<(typeof filters)[number]>('all');
   const [page, setPage] = useState(1);
   const [applications, setApplications] = useState<ApplicationRow[]>([]);
@@ -169,9 +172,23 @@ export default function ApplicationsPage() {
   }, [selectedProduct, amount, tenureMonths]);
 
   const filtered = useMemo(() => {
-    if (filter === 'all') return applications;
-    return applications.filter((a) => normalizeStatus(a.status) === filter);
-  }, [applications, filter]);
+    let rows = applications;
+    if (filter !== 'all') {
+      rows = rows.filter((a) => normalizeStatus(a.status) === filter);
+    }
+    if (highlightId) {
+      const match = rows.find((a) => a.id === highlightId);
+      if (match) return [match, ...rows.filter((a) => a.id !== highlightId)];
+      // Still show the highlighted app even if filter would hide it
+      const raw = applications.find((a) => a.id === highlightId);
+      if (raw) return [raw, ...rows.filter((a) => a.id !== highlightId)];
+    }
+    return rows;
+  }, [applications, filter, highlightId]);
+
+  useEffect(() => {
+    if (highlightId) setPage(1);
+  }, [highlightId]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const rows = filtered.slice((page - 1) * pageSize, page * pageSize);
@@ -376,7 +393,13 @@ export default function ApplicationsPage() {
                 </thead>
                 <tbody>
                   {rows.map((row) => (
-                    <tr key={row.id} className="border-b border-border/60">
+                    <tr
+                      key={row.id}
+                      className={cn(
+                        'border-b border-border/60',
+                        highlightId === row.id && 'bg-primary/10',
+                      )}
+                    >
                       <td className="py-3 font-mono text-xs text-primary">
                         {shortId(row.id)}
                       </td>
