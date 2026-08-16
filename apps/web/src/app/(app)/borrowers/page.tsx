@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import posthog from 'posthog-js';
 import { Plus, Trash2, X } from 'lucide-react';
 import { creditScoreColor } from '@lms/utils';
@@ -37,7 +38,8 @@ function formatSince(value: string) {
 }
 
 export default function BorrowersPage() {
-  const [q, setQ] = useState('');
+  const searchParams = useSearchParams();
+  const [q, setQ] = useState(() => searchParams.get('q') ?? '');
   const [borrowers, setBorrowers] = useState<Borrower[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -56,6 +58,11 @@ export default function BorrowersPage() {
   const [occupation, setOccupation] = useState('');
   const [creditScore, setCreditScore] = useState('700');
   const [password, setPassword] = useState('');
+
+  useEffect(() => {
+    const fromUrl = searchParams.get('q');
+    if (fromUrl != null) setQ(fromUrl);
+  }, [searchParams]);
 
   const load = useCallback(async () => {
     setLoading(true);

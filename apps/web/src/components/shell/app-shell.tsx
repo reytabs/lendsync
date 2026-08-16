@@ -9,7 +9,6 @@ import {
   Calculator,
   BarChart3,
   Settings,
-  Search,
   PanelLeftClose,
   PanelLeft,
   Banknote,
@@ -19,12 +18,12 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { getStoredAuth, logoutAuthSession } from '@/lib/auth';
 import { cn } from '@/lib/utils';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/logo';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { NotificationsBell } from '@/components/notifications/notifications-bell';
 import { OrgSwitcher } from '@/components/shell/org-switcher';
+import { GlobalSearch } from '@/components/shell/global-search';
 import { startStaffTour } from '@/components/tour/staff-tour';
 
 function initialsOf(name: string) {
@@ -111,7 +110,7 @@ const titles: Record<string, { title: string; subtitle: string }> = {
   },
   '/repayments': {
     title: 'Repayments',
-    subtitle: 'Disburse loans and record borrower payments',
+    subtitle: 'Disburse, collect, settle early, and restructure loans',
   },
   '/emi-calculator': {
     title: 'EMI Calculator',
@@ -350,10 +349,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <p className="text-xs text-muted-foreground">{meta.subtitle}</p>
           </div>
           <div className="flex items-center gap-3">
-            <div className="relative hidden md:block">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input className="w-56 pl-9" placeholder="Quick search…" />
-            </div>
+            <GlobalSearch />
             <ThemeToggle />
             <div data-tour="notifications">
               <NotificationsBell />
